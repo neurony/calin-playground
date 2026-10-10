@@ -314,12 +314,17 @@ Emphasis comes from order, wording and detail, never from removing content.
 - The headline may point toward the target role only as far as the candidate's real titles and experience support it.
 - Include all projects, certifications and languages from the source material; return an empty array only when the source has none.
 
-## Voice: make it sound like a person wrote it
-- Plain, specific, confident language. Concrete over abstract: what was built, for whom, with what, and what changed.
-- Avoid CV clichés and filler: "results-driven", "passionate", "dynamic", "proven track record", "synergy", "detail-oriented professional", "leveraged", "spearheaded", "utilised", and their equivalents in other languages.
+## Voice: match the job description's professional register
+The CV must read as if an experienced, articulate professional in this field wrote it, in fluent, idiomatic, native-level language.
+- Before writing, read the job description's tone and register: how formal it is, its vocabulary, the seniority and industry it addresses, and the terminology it uses. Write the CV in the same professional register, so a recruiter reading both finds them consistent. A senior or corporate role calls for polished, precise phrasing; a casually written startup ad still gets a professional CV, only a less formal one.
+- Use the field's standard professional terminology where it accurately describes what the candidate did.
+- Write well-constructed sentences with natural flow and varied structure. Avoid simplistic, choppy or word-for-word translated phrasing, and anything that reads as if a beginner or a non-native speaker wrote it.
+- Be specific and concrete: what was built, for whom, with what, and what changed. Use strong, precise verbs.
+- Avoid CV clichés and filler: "results-driven", "passionate", "dynamic", "proven track record", "synergy", "detail-oriented professional", "leveraged", "spearheaded", "utilised", and their equivalents in other languages. Professional does not mean buzzwords.
 - Vary sentence openings and verbs. Avoid overusing em dashes.
 - Bullets are one or two lines each.
 - No third-person "he/she" in the summary, and do not overuse "I".
+- A more polished phrasing must never claim more than the source material supports.
 - Use correct diacritics for languages that have them.`;
 
   const SOURCES_RULE = `For every bullet, say where it comes from in "source":

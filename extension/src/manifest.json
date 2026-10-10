@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "CV Tailor",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Tailor your CV to a job ad with Claude. Shows how well your CV fits the LinkedIn job you are looking at.",
   "minimum_chrome_version": "116",
   "icons": {
