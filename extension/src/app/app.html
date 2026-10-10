@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CV Tailor</title>
+<link rel="icon" href="icons/icon32.png">
+<link rel="stylesheet" href="fonts/ui/fonts.css">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>CV Tailor</h1>
+      <p class="lede muted">Tailor your CV to a job description. It keeps everything in your CV, brings your relevant experience forward and never invents anything.</p>
+    </div>
+    <nav class="tabs" role="tablist" aria-label="Steps">
+      <button class="tab" id="tab-input" role="tab" aria-selected="true">1. Details</button>
+      <button class="tab" id="tab-questions" role="tab" aria-selected="false" disabled>2. Questions</button>
+      <button class="tab" id="tab-result" role="tab" aria-selected="false" disabled>3. Tailored CV</button>
+      <button class="tab" id="tab-history" role="tab" aria-selected="false">Saved CVs <span class="count" id="history-count"></span></button>
+      <button class="tab" id="tab-settings" role="tab" aria-selected="false">Settings</button>
+    </nav>
+  </header>
+
+  <div class="panel key-banner row spread" id="key-banner" hidden>
+    <p class="small"><b>Add your Anthropic API key</b> to let CV Tailor use Claude. It stays in this browser.</p>
+    <button class="btn small primary" id="btn-go-settings">Open Settings</button>
+  </div>
+
+  <!-- INPUT VIEW -->
+  <section id="view-input" class="stack">
+    <div class="top-bar">
+      <p class="status small" id="reset-status"></p>
+      <button class="btn" id="btn-new-role" title="Clears the job description, questions and tailored CV. Keeps your CV, extra information and saved answers.">New role</button>
+      <button class="btn danger" id="btn-reset" title="Clears everything: job description, CV, extra information, questions and saved answers. Saved CVs are kept.">Reset everything</button>
+    </div>
+
+    <div class="panel pending-job" id="pending-job" hidden></div>
+    <div class="panel linkedin-job" id="linkedin-job" hidden></div>
+
+    <div class="example-note" id="example-note">
+      <p class="small"><span class="badge">Example</span>The form is filled with made-up data so you can see how it works. Replace it with your own.</p>
+      <button class="btn small" id="btn-clear">Clear the form</button>
+    </div>
+
+    <div class="panel step">
+      <div class="step-head"><span class="step-num">1</span><h2>Job description</h2></div>
+      <p class="muted small">Upload the job ad (PDF, DOCX or TXT) or paste it below: responsibilities, requirements, about the company.</p>
+      <div class="drop" id="jd-drop">
+        <input type="file" id="jd-file">
+        <span class="file-status muted" id="jd-file-status">You can drop the file here. Its text appears in the box below.</span>
+      </div>
+      <textarea id="jd" rows="10" placeholder="Paste the job description here…"></textarea>
+    </div>
+
+    <div class="panel step">
+      <div class="step-head"><span class="step-num">2</span><h2>Your CV</h2></div>
+      <p class="muted small">Upload your CV (PDF, DOCX or TXT) and/or paste it as text. You can use both. Scanned PDFs are read with Claude.</p>
+      <div class="drop" id="drop">
+        <input type="file" id="cv-file">
+        <span class="file-status muted" id="file-status">No file uploaded. You can drop the file here.</span>
+        <button class="btn small" id="btn-remove-file" hidden>Remove file</button>
+      </div>
+      <textarea id="cv-text" rows="8" placeholder="(Optional) Paste your CV as text…"></textarea>
+    </div>
+
+    <div class="panel actions">
+      <label for="lang">CV language
+        <select id="lang">
+          <option value="en">English</option>
+          <option value="ro">Romanian</option>
+          <option value="auto">Same as the job description</option>
+        </select>
+      </label>
+      <div class="row">
+        <button class="btn" id="btn-stop" hidden>Stop</button>
+        <button class="btn" id="btn-skip" title="Go to step 2 without questions; you can add extra information there">Skip questions</button>
+        <button class="btn primary" id="btn-analyze">Continue: check fit and questions</button>
+      </div>
+      <p class="status small" id="status" style="flex-basis:100%"></p>
+    </div>
+  </section>
+
+  <!-- QUESTIONS VIEW -->
+  <section id="view-questions" class="stack" hidden>
+    <div class="panel" id="match-panel" hidden></div>
+    <div class="panel step" id="q-intro">
+      <div class="step-head"><h2>A few questions before we write your CV</h2></div>
+      <p class="muted small">These are about requirements in the job ad that your CV does not show, or shows only vaguely. What you write here can go into the CV. If you don't have that experience, tick "I don't have this experience" and nothing will be added. Questions left empty are ignored.</p>
+    </div>
+    <div class="q-list" id="questions"></div>
+    <div class="panel step">
+      <div class="step-head"><h2>Extra information</h2></div>
+      <p class="muted small">Anything else about your experience that is not in your CV: projects, technologies, responsibilities, results. Only real things. Everything you write here can be used, and nothing beyond it is added.</p>
+      <textarea id="extra" rows="6" placeholder="E.g. In 2023 I moved three services to AWS; I use PostgreSQL every day…"></textarea>
+    </div>
+    <div class="panel actions">
+      <button class="btn" id="btn-q-back">Back to details</button>
+      <div class="row">
+        <span class="muted small q-progress" id="q-progress"></span>
+        <button class="btn" id="btn-q-stop" hidden>Stop</button>
+        <button class="btn primary" id="btn-generate">Write my tailored CV</button>
+      </div>
+      <p class="status small" id="q-status" style="flex-basis:100%"></p>
+    </div>
+  </section>
+
+  <!-- RESULT VIEW -->
+  <section id="view-result" class="stack" hidden>
+    <div class="panel analysis" id="analysis"></div>
+    <div class="panel check" id="check" hidden></div>
+    <div class="cols">
+      <div class="editor stack" id="editor"></div>
+      <div class="preview-col">
+        <div class="preview-bar">
+          <label class="row small" for="template">Template
+            <select id="template">
+              <option value="classic">Classic (one column, ATS-friendly)</option>
+              <option value="compact">Compact (one column, denser)</option>
+              <option value="modern">Modern (sidebar, less ATS-friendly)</option>
+            </select>
+          </label>
+          <div class="row">
+            <button class="btn" id="btn-regenerate">Regenerate</button>
+            <button class="btn primary" id="btn-pdf">Download PDF</button>
+          </div>
+        </div>
+        <div class="row spread">
+          <label class="row small" for="show-sources"><input type="checkbox" id="show-sources"> Show where each point comes from</label>
+          <span class="muted small" id="page-count"></span>
+        </div>
+        <div class="legend" id="legend" hidden>
+          <span><i></i>Unchanged from your CV</span>
+          <span><i style="background:var(--src-rephrased)"></i>Reworded from your CV</span>
+          <span><i style="background:var(--src-answers)"></i>From your answers</span>
+          <span><i style="background:var(--src-extra)"></i>From extra information</span>
+          <span><i style="background:var(--src-edited)"></i>Edited by you</span>
+        </div>
+        <p class="status small" id="pdf-status"></p>
+        <div class="pages" id="pages"><div class="empty">Your CV appears here after it is written.</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SAVED CVS VIEW -->
+  <section id="view-history" class="stack" hidden>
+    <div class="panel row spread">
+      <div>
+        <h2>Saved CVs</h2>
+        <p class="muted small">Every tailored CV is saved here, in this browser only. Open one to edit it or download it again.</p>
+      </div>
+      <button class="btn danger" id="btn-clear-history">Delete all</button>
+    </div>
+    <div class="history" id="history"></div>
+  </section>
+  <!-- SETTINGS VIEW -->
+  <section id="view-settings" class="stack" hidden>
+    <div class="panel step">
+      <div class="step-head"><h2>Anthropic API key</h2></div>
+      <p class="muted small">CV Tailor calls Claude with your own key. Create one at console.anthropic.com → API keys. Usage is billed to your Anthropic account.</p>
+      <label class="field" for="api-key"><span>API key</span>
+        <input type="password" id="api-key" autocomplete="off" spellcheck="false" placeholder="sk-ant-…">
+      </label>
+      <div class="row">
+        <button class="btn primary" id="btn-save-key">Save key</button>
+        <button class="btn" id="btn-test-key">Test key</button>
+        <button class="btn" id="btn-show-key">Show</button>
+        <button class="btn danger" id="btn-remove-key">Remove key</button>
+      </div>
+      <p class="status small" id="key-status"></p>
+    </div>
+
+    <div class="panel step">
+      <div class="step-head"><h2>LinkedIn</h2></div>
+      <label class="row" for="auto-score"><input type="checkbox" id="auto-score"> Auto-score LinkedIn jobs</label>
+      <p class="muted small">When this is on and you open a job ad on linkedin.com, the toolbar icon shows how well your CV fits it (green 75 and above, blue 45-74, orange below 45). "CV?" means CV Tailor has no CV of yours yet; "KEY" means the API key is missing. Each ad is scored once; it is scored again only if your CV changes.</p>
+      <p class="status small" id="auto-status"></p>
+    </div>
+
+    <div class="panel step privacy">
+      <div class="step-head"><h2>What is sent, and where</h2></div>
+      <p class="small">Data leaves your browser only to <b>api.anthropic.com</b> (Anthropic's API), with your key, and only in these cases:</p>
+      <ul class="small">
+        <li><b>Auto-score</b> (only while it is on, only on linkedin.com job ads, once per ad): the job ad's title, company and description, and your CV text (uploaded file and pasted text). Model: Claude Haiku 5.5. Nothing is sent for other LinkedIn pages, for other sites, or when you have no CV or no key.</li>
+        <li><b>Continue: check fit and questions</b>: the job description, your CV, your extra information and your earlier answers. Model: Claude Opus 5.5.</li>
+        <li><b>Write my tailored CV / Regenerate</b>, the <b>completeness check</b> that runs right after, <b>Put them back</b> and <b>Rewrite</b>: the job description, your CV, extra information, your answers and the tailored CV. Model: Claude Opus 5.5.</li>
+        <li><b>Scanned PDFs</b> (no text layer): images of up to 8 pages, to be transcribed. Model: Claude Opus 5.5.</li>
+      </ul>
+      <p class="small">Your key, CV, answers and saved CVs are stored only in this browser profile (extension storage). CV Tailor has no server and sends nothing anywhere else. LinkedIn pages are read in your browser; reading them sends nothing by itself.</p>
+    </div>
+  </section>
+</div>
+
+<script src="vendor/pdf.min.js"></script>
+<script src="vendor/mammoth.browser.min.js"></script>
+<script src="vendor/pdfmake.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

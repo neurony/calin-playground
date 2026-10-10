@@ -4,6 +4,8 @@ Aplicație locală (Next.js) care primește un job description și CV-ul tău ș
 
 **Regula de bază: nu inventează nimic.** Aplicația doar reordonează, selectează și reformulează experiența ta reală ca să scoată în față ce cere job-ul. Cerințele din anunț pe care materialul tău nu le acoperă apar separat, la „Cerințe fără acoperire”, și nu sunt adăugate în CV.
 
+Există și o **extensie de browser** (Chrome/Edge) cu aplicația și nota CV-ului pe anunțurile LinkedIn: vezi [`extension/README.md`](extension/README.md).
+
 ## Ce face
 
 - **Input:** job description (upload PDF / DOCX / TXT și/sau text lipit) + CV (upload PDF / DOCX / TXT și/sau text lipit) + informații suplimentare scrise liber (proiecte, tehnologii, rezultate care nu apar în CV).

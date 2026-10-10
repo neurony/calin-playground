@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>LinkedIn (test fixture)</title>
+<style>
+  body { font-family: sans-serif; margin: 0; display: flex; gap: 16px; padding: 16px; }
+  .jobs-search-results-list { width: 280px; }
+  .job-card-container { border: 1px solid #ccc; padding: 8px; margin-bottom: 8px; cursor: pointer; }
+  .jobs-search__job-details { flex: 1; }
+</style>
+</head>
+<body>
+<!-- A stand-in for LinkedIn's job pages, using LinkedIn's class names. It is a single-page app like
+     LinkedIn: clicking a job in the search list changes the URL with history.pushState and swaps the
+     description in a little later, as LinkedIn does after fetching it. -->
+<div id="app"></div>
+<script>
+const JOBS = {
+  "4000000001": {
+    title: "Senior Backend Engineer – Payments", company: "Example Payments SRL", location: "Bucharest, Romania (Hybrid)",
+    text: `About the job
+We build the payments platform for merchants across Central and Eastern Europe.
+
+Responsibilities:
+- Build and run backend services in Java / Spring Boot
+- Design REST APIs used by our mobile apps and partners
+- Work with our AWS infrastructure (ECS, RDS) and CI/CD pipelines
+- Mentor less experienced engineers through code review and pairing
+
+Requirements:
+- 5+ years with Java and Spring
+- Experience with relational databases (PostgreSQL)
+- Experience with AWS
+- Kubernetes is a plus
+- Professional English`,
+  },
+  "4000000002": {
+    title: "Java Developer", company: "Example Retail Tech", location: "Cluj-Napoca, Romania",
+    text: `About the job
+Example Retail Tech maintains the stock and ordering systems for 300 shops.
+
+What you will do:
+- Maintain and extend Java services for stock management
+- Write and optimise SQL queries on PostgreSQL
+- Build internal reports for the sales and logistics teams
+
+What we look for:
+- 3+ years of Java
+- Good SQL skills
+- Experience with Angular is a plus (marker: RETAIL-JOB-TWO)`,
+  },
+  "4000000003": {
+    title: "Kubernetes Platform Engineer", company: "Example Cloud", location: "Remote",
+    text: `About the job
+You will run our Kubernetes platform used by 40 product teams.
+
+Requirements:
+- 5+ years running Kubernetes in production (must have)
+- Terraform and Helm (must have)
+- Go programming
+- On-call experience for platform services
+- Service mesh (Istio) is a plus (marker: CLOUD-JOB-THREE)`,
+  },
+  "4000000004": {
+    title: "Data Engineer", company: "Example Analytics", location: "Iași, Romania",
+    text: `About the job
+Build data pipelines with Python, Spark and Airflow. SQL and PostgreSQL every day. Experience with dbt and Snowflake is a plus.
+Requirements: 3+ years in data engineering; Python; SQL; Airflow. (marker: DATA-JOB-FOUR)`,
+  },
+  "4000000005": {
+    title: "Engineering Manager – Payments", company: "Example Payments SRL", location: "Bucharest, Romania",
+    text: `About the job
+Lead a team of 8 backend engineers building payment services in Java and Spring Boot on AWS.
+Requirements: 2+ years managing engineers; strong Java background; hiring and coaching experience; stakeholder management. (marker: MANAGER-JOB-FIVE)`,
+  },
+  "4000000006": {
+    title: "Site Reliability Engineer", company: "Example Telco", location: "Bucharest, Romania",
+    text: `About the job
+Keep our telecom platform reliable: monitoring, incident response and automation with Python and Ansible on Linux.
+Requirements: 3+ years in operations or SRE; Linux; Prometheus and Grafana; on-call rotations. (marker: SRE-JOB-SIX)`,
+  },
+};
+const SEARCH_LIST = ["4000000002", "4000000003", "4000000004", "4000000005", "4000000006"];
+const app = document.getElementById("app");
+
+function topCard(job) {
+  return `<div class="job-details-jobs-unified-top-card__container">
+    <h1 class="t-24 job-details-jobs-unified-top-card__job-title">${job.title}</h1>
+    <div class="job-details-jobs-unified-top-card__company-name"><a href="#">${job.company}</a></div>
+    <div class="job-details-jobs-unified-top-card__primary-description-container"><span class="tvm__text">${job.location}</span></div>
+  </div>`;
+}
+function description(job) {
+  return `<div class="jobs-description__content jobs-description-content"><div class="jobs-box__html-content" id="job-details"><h2>About the job</h2>${job.text.replace(/^About the job\n/, "").split("\n").map((l) => `<p>${l || "&nbsp;"}</p>`).join("")}</div></div>`;
+}
+function render() {
+  const path = location.pathname;
+  const view = path.match(/^\/jobs\/view\/(\d+)/);
+  if (view) {
+    const job = JOBS[view[1]];
+    app.innerHTML = `<main class="jobs-details"><div class="jobs-details__main-content">${topCard(job)}${description(job)}</div></main>`;
+    return;
+  }
+  if (path.startsWith("/jobs/search")) {
+    const id = new URLSearchParams(location.search).get("currentJobId") || SEARCH_LIST[0];
+    if (!document.querySelector(".jobs-search-results-list")) {
+      app.innerHTML = `<div class="jobs-search-results-list">${SEARCH_LIST.map((j) => `<div class="job-card-container" data-job-id="${j}">${JOBS[j].title}</div>`).join("")}</div>
+        <div class="jobs-search__job-details" id="details"></div>`;
+      for (const card of document.querySelectorAll(".job-card-container")) {
+        card.onclick = () => {
+          const u = new URL(location.href);
+          u.searchParams.set("currentJobId", card.dataset.jobId);
+          history.pushState({}, "", u);
+          // The URL changes first; the panel still shows the previous job for a moment.
+          setTimeout(renderDetails, 700);
+        };
+      }
+    }
+    renderDetails();
+    return;
+  }
+  app.innerHTML = `<main><h1>Feed</h1><p>Posts from your network.</p><a id="to-job" href="/jobs/view/4000000001/">A job</a></main>`;
+}
+function renderDetails() {
+  const id = new URLSearchParams(location.search).get("currentJobId") || SEARCH_LIST[0];
+  const job = JOBS[id];
+  document.getElementById("details").innerHTML = topCard(job) + description(job);
+}
+window.addEventListener("popstate", render);
+render();
+</script>
+</body>
+</html>
