@@ -63,14 +63,17 @@ async function clickToolbar() {
   await sw.evaluate(async (tabId) => globalThis.cvTailor.openAppForTab(await chrome.tabs.get(tabId)), jobTabId);
 }
 
+// Playwright cannot show Chrome's side panel, so the test opens the panel's page (app.html) in a tab
+// with a panel-like width after the toolbar click; the app picks up the job the same way.
 async function openAppFromToolbar() {
-  const pagePromise = context.waitForEvent("page");
   await clickToolbar();
-  const page = await pagePromise;
+  const page = await context.newPage();
   watchErrors(page);
-  await page.waitForLoadState("domcontentloaded");
+  await page.setViewportSize({ width: 520, height: 900 });
+  await page.goto(`chrome-extension://${extId}/app.html`);
   return page;
 }
+const panelOpens = () => sw.evaluate(() => globalThis.__panelOpens || []);
 
 const scoreCalls = () => mock.of("score");
 // The editor's text lives in form fields.
@@ -91,6 +94,8 @@ test.beforeAll(async () => {
   mock = await installAnthropicMock(context);
   sw = context.serviceWorkers()[0] || (await context.waitForEvent("serviceworker"));
   extId = new URL(sw.url()).host;
+  // chrome.sidePanel.open() needs a real click on the toolbar button; record the calls instead.
+  await sw.evaluate(() => { chrome.sidePanel.open = async (options) => { (globalThis.__panelOpens ||= []).push(options); }; });
 });
 
 test.afterAll(async () => {
@@ -218,16 +223,15 @@ test("with auto-score off nothing is sent; turning it on scores the open job", a
   expect(scoreCalls()).toHaveLength(6);
 });
 
-test("the toolbar button opens the app in a popup window with the job filled in", async () => {
+test("the toolbar button opens the app in the side panel with the job filled in", async () => {
   await jobPage.goto(JOB_A);
   await expect.poll(() => badgeText(), { timeout: 10_000 }).toBe("82");
-  await app.close(); // the app tab opened by the test; the toolbar button opens its own window
+  await app.close(); // the app tab opened by the test; from here on the app is the side panel's page
+  const manifest = await sw.evaluate(() => chrome.runtime.getManifest());
+  expect(manifest.side_panel.default_path).toBe("app.html");
   app = await openAppFromToolbar();
-  expect(app.url()).toBe(`chrome-extension://${extId}/app.html`);
-  const windows = await sw.evaluate(async () => (await chrome.windows.getAll()).map((w) => ({ type: w.type, width: w.width, height: w.height })));
-  const popup = windows.find((w) => w.type === "popup");
-  expect(popup).toBeTruthy();
-  expect(popup.width).toBeGreaterThanOrEqual(1000);
+  const jobWindowId = await sw.evaluate(async (tabId) => (await chrome.tabs.get(tabId)).windowId, jobTabId);
+  expect(await panelOpens()).toEqual([{ windowId: jobWindowId }]);
   await expect(app.locator("#view-input")).toBeVisible();
   await expect(app.locator("#jd")).toHaveValue(/Senior Backend Engineer – Payments/);
   await expect(app.locator("#jd")).toHaveValue(/Kubernetes is a plus/);
@@ -268,6 +272,12 @@ test("full flow: questions, writing, completeness check, rewrite, preview, PDF, 
   await expect(app.locator("#check")).toContainText("everything from your original CV is in the tailored version", { timeout: 20_000 });
   await expect.poll(() => editorText(app)).toContain("Took part in sprint planning");
 
+  // In the narrow side panel the editor and the preview take turns.
+  await expect(app.locator("#editor")).toBeHidden();
+  await app.click('#narrow-switch [data-pane="editor"]');
+  await expect(app.locator("#editor")).toBeVisible();
+  await expect(app.locator("#pages")).toBeHidden();
+
   // Tips on hover and a section rewrite.
   await expect(app.locator("#editor .tip").first()).toBeAttached();
   const summary = app.locator("fieldset", { has: app.locator("legend", { hasText: "Profile" }) });
@@ -277,6 +287,8 @@ test("full flow: questions, writing, completeness check, rewrite, preview, PDF, 
   await expect.poll(() => editorText(app), { timeout: 20_000 }).toContain("(rewritten)");
   const rewriteCall = mock.of("rewrite").at(-1);
   expect(rewriteCall.text).toContain('"shorter"');
+
+  await app.click('#narrow-switch [data-pane="preview"]');
 
   // Sources and templates.
   await app.check("#show-sources");
@@ -323,7 +335,7 @@ test("full flow: questions, writing, completeness check, rewrite, preview, PDF, 
   expect(mock.of("questions")[0].text).toContain("## Questions");
 });
 
-test("clicking the toolbar button again focuses the same window and keeps the work", async () => {
+test("clicking the toolbar button again while the app is open keeps the work", async () => {
   let opened = false;
   const onPage = () => { opened = true; };
   context.on("page", onPage);
@@ -331,6 +343,7 @@ test("clicking the toolbar button again focuses the same window and keeps the wo
   await app.waitForTimeout(1500);
   context.off("page", onPage);
   expect(opened).toBe(false);
+  expect((await panelOpens()).length).toBe(2);
   await app.click("#tab-result");
   await expect(app.locator("#view-result")).toBeVisible();
   await expect.poll(() => editorText(app)).toContain("Took part in sprint planning");
@@ -339,6 +352,9 @@ test("clicking the toolbar button again focuses the same window and keeps the wo
 test("a changed CV invalidates the cached score", async () => {
   await app.click("#tab-input");
   await app.fill("#cv-text", CV + "\nKubernetes (CKA, 2024)");
+  // In the browser the side panel sits next to the LinkedIn tab, which stays the active tab.
+  await app.waitForTimeout(600);
+  await jobPage.bringToFront();
   await expect.poll(() => badgeText(), { timeout: 15_000 }).toBe("87");
   expect(scoreCalls().at(-1).text).toContain("Kubernetes (CKA, 2024)");
 });

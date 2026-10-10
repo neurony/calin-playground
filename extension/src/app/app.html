@@ -111,7 +111,11 @@
   <section id="view-result" class="stack" hidden>
     <div class="panel analysis" id="analysis"></div>
     <div class="panel check" id="check" hidden></div>
-    <div class="cols">
+    <div class="narrow-switch" id="narrow-switch" role="group" aria-label="Show">
+      <button class="btn small" data-pane="editor" aria-pressed="false">Edit</button>
+      <button class="btn small" data-pane="preview" aria-pressed="true">Preview</button>
+    </div>
+    <div class="cols" id="cols" data-pane="preview">
       <div class="editor stack" id="editor"></div>
       <div class="preview-col">
         <div class="preview-bar">

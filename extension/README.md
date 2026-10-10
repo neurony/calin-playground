@@ -9,7 +9,7 @@ Aplicația CV Tailor (portul lui `artifact/cv-tailor.template.html`) ca extensie
   - Cache per id de job; se recalculează doar când se schimbă CV-ul (hash SHA-256 al textului CV-ului) sau textul anunțului.
   - Debounce la navigare (1 s după schimbarea URL-ului, apoi așteaptă ca descrierea din panou să fie a noului job și să fie stabilă); un singur apel de notă odată; dintr-o serie de click-uri rapide se notează doar ultimul job.
   - După analiza completă din aplicație (pasul 2, Opus) pentru același anunț și același CV, iconița preia scorul acela, ca să vezi același număr în ambele locuri.
-- **Click pe iconiță** deschide aplicația într-o fereastră separată (`chrome.windows.create`, `type: "popup"`, cât fereastra browserului), cu anunțul curent completat la pasul 1 și nota deja calculată afișată. Dacă fereastra e deja deschisă, doar o aduce în față. Dacă ai răspunsuri nesalvate la întrebările altui rol, te întreabă înainte să le înlocuiască.
+- **Click pe iconiță** deschide aplicația în **panoul lateral** al browserului (Side Panel, în dreapta), cu anunțul curent completat la pasul 1 și nota deja calculată afișată. Panoul rămâne deschis când schimbi taburile și îl poți lărgi trăgând de marginea din stânga. Dacă panoul e deja deschis, un nou click încarcă anunțul din tabul curent. Dacă ai răspunsuri nesalvate la întrebările altui rol, te întreabă înainte să le înlocuiască. Când panoul e îngust, la pasul 3 editorul și previzualizarea se comută cu **Edit / Preview**.
 - **Aplicația** are tot ce are artefactul: pașii Details → Questions → Tailored CV, Saved CVs, scorul 0–100 cu verdict, întrebări cu memoria răspunsurilor („Still accurate / Update it”), New role / Reset everything, verificarea completitudinii („Put them back”), Rewrite pe secțiuni, sursa fiecărui punct, tips la hover, 3 template-uri PDF (pdfmake) cu previzualizare reală (pdf.js), PDF-uri scanate citite de Claude. Prompturile (RULES, QUESTION_RULES, verificarea, repair, rewrite, transcrierea) sunt copiate neschimbate.
   - Model: `claude-opus-5-5`, streaming, adaptive thinking, cu `fallbacks: "default"` (dacă Claude refuză o cerere, API-ul o reia pe modelul de rezervă recomandat). Effort: `high` pentru scrierea CV-ului și „Put them back”, `medium` pentru întrebări, verificare și rewrite, `low` pentru transcrierea scanărilor (constanta `EFFORT` și funcția `transcribeScannedPdf` din `src/app/app.js`).
 - **Settings:** cheia API (Save / Test key / Show / Remove), comutatorul „Auto-score LinkedIn jobs” și lista exactă a datelor trimise și unde.
@@ -51,6 +51,7 @@ Nimic nu se trimite pentru alte pagini LinkedIn, alte site-uri, cu auto-score op
 
 ## Permisiuni
 
+- `sidePanel`: aplicația se deschide în panoul lateral.
 - `storage`, `unlimitedStorage`: starea aplicației, CV-urile salvate, cheia, cache-ul notelor.
 - `https://api.anthropic.com/*`: apelurile către Claude.
 - content script pe `https://*.linkedin.com/*`: citește anunțul deschis (LinkedIn e SPA, așa că scriptul urmărește URL-ul paginii).
@@ -62,7 +63,7 @@ Fără permisiunea `tabs`: extensia nu vede URL-urile taburilor; află de anunț
 | Fișier | Rol |
 |---|---|
 | `src/manifest.json` | Manifest V3 |
-| `src/background.js` | Service worker: badge, cache, coada de notare, deschiderea ferestrei |
+| `src/background.js` | Service worker: badge, cache, coada de notare, deschiderea panoului lateral |
 | `src/content.js` | Pe LinkedIn: detectează id-ul jobului, așteaptă descrierea, o trimite service worker-ului |
 | `src/shared/claude.js` | Apelurile Anthropic (SDK oficial `@anthropic-ai/sdk`, `dangerouslyAllowBrowser`), maparea erorilor, nota rapidă |
 | `src/shared/store.js` | Cheile din `chrome.storage.local`, textul CV-ului, hash, compunerea anunțului |
@@ -81,7 +82,7 @@ npm test             # build + Playwright (Chromium cu extensia încărcată)
 HEADED=1 npm test    # cu fereastră vizibilă
 ```
 
-Testele pornesc Chromium cu `dist/` încărcat, servesc o fixtură care imită paginile de job LinkedIn (aceleași clase CSS, schimbări de URL cu `history.pushState`, descrierea înlocuită cu întârziere) și simulează API-ul Anthropic prin interceptarea cererilor (inclusiv cele din service worker). Acoperă: badge-ul (`CV?`, scor, culori, cache, panoul din căutare, debounce, pagini care nu sunt anunțuri, auto-score oprit/pornit, invalidare la schimbarea CV-ului), fereastra popup cu anunțul precompletat, fluxul complet (întrebări, scriere, verificare + Put them back, Rewrite, surse, template-uri, previzualizare, descărcare PDF, Saved CVs), Stop, încărcare PDF/DOCX/PDF scanat, New role / Reset, lipsa erorilor în pagină (inclusiv CSP).
+Testele pornesc Chromium cu `dist/` încărcat, servesc o fixtură care imită paginile de job LinkedIn (aceleași clase CSS, schimbări de URL cu `history.pushState`, descrierea înlocuită cu întârziere) și simulează API-ul Anthropic prin interceptarea cererilor (inclusiv cele din service worker). Acoperă: badge-ul (`CV?`, scor, culori, cache, panoul din căutare, debounce, pagini care nu sunt anunțuri, auto-score oprit/pornit, invalidare la schimbarea CV-ului), deschiderea panoului lateral cu anunțul precompletat (Playwright nu poate afișa panoul lateral, așa că testul deschide pagina panoului într-un tab îngust), fluxul complet (întrebări, scriere, verificare + Put them back, Rewrite, surse, template-uri, previzualizare, descărcare PDF, Saved CVs), Stop, încărcare PDF/DOCX/PDF scanat, New role / Reset, lipsa erorilor în pagină (inclusiv CSP).
 
 Dacă instalezi Playwright local, browserul vine cu `npx playwright install chromium`.
 

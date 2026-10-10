@@ -172,41 +172,20 @@ chrome.storage.onChanged.addListener(async (changes, area) => {
   }
 });
 
-// ---------- The app window ----------
-async function findAppWindow() {
-  const { appWindowId } = await chrome.storage.session.get("appWindowId");
-  if (appWindowId == null) return null;
-  try { return await chrome.windows.get(appWindowId); } catch { return null; }
+// ---------- The app, in the browser's side panel ----------
+// The panel has to be opened while Chrome still counts the toolbar click as a user gesture, so it is
+// opened first, before anything is awaited. The app then picks up the job from OPEN_KEY (on load, or
+// through storage.onChanged when the panel is already open).
+function openAppForTab(tab) {
+  const opened = tab?.windowId != null
+    ? chrome.sidePanel.open({ windowId: tab.windowId }).catch((e) => console.error("side panel", e))
+    : Promise.resolve();
+  const requested = (async () => {
+    const jobId = tab?.id != null ? (await loadTabJobs())[tab.id] || null : null;
+    await chrome.storage.local.set({ [OPEN_KEY]: { jobId, at: Date.now() } });
+  })();
+  return Promise.all([opened, requested]);
 }
-
-async function openAppForTab(tab) {
-  const jobId = tab?.id != null ? (await loadTabJobs())[tab.id] || null : null;
-  await chrome.storage.local.set({ [OPEN_KEY]: { jobId, at: Date.now() } });
-  const existing = await findAppWindow();
-  if (existing) {
-    await chrome.windows.update(existing.id, { focused: true, state: existing.state === "minimized" ? "normal" : undefined });
-    return existing.id;
-  }
-  // As large as the browser window it is opened from (Chrome refuses windows mostly off-screen).
-  const url = chrome.runtime.getURL("app.html");
-  let win;
-  try {
-    const w = tab?.windowId != null ? await chrome.windows.get(tab.windowId) : await chrome.windows.getLastFocused();
-    const width = Math.min(1500, Math.max((w.width || 1400) - 80, Math.min(w.width || 1400, 900)));
-    const height = Math.max(Math.min(700, w.height || 700), (w.height || 900) - 60);
-    const left = Math.max(0, Math.round((w.left || 0) + ((w.width || width) - width) / 2));
-    const top = Math.max(0, (w.top || 0) + Math.round(((w.height || height) - height) / 2));
-    win = await chrome.windows.create({ url, type: "popup", focused: true, width, height, left, top });
-  } catch {
-    win = await chrome.windows.create({ url, type: "popup", focused: true });
-  }
-  await chrome.storage.session.set({ appWindowId: win.id });
-  return win.id;
-}
-chrome.windows.onRemoved.addListener(async (id) => {
-  const { appWindowId } = await chrome.storage.session.get("appWindowId");
-  if (appWindowId === id) await chrome.storage.session.remove("appWindowId");
-});
 chrome.action.onClicked.addListener((tab) => { openAppForTab(tab); });
 
 // Exposed for the automated tests (they cannot click the toolbar button).

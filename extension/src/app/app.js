@@ -1235,6 +1235,13 @@ If the material already covers every requirement well, return an empty "question
     }
   }
   window.addEventListener("resize", () => schedulePreview(300));
+  for (const btn of document.querySelectorAll("#narrow-switch [data-pane]")) {
+    btn.addEventListener("click", () => {
+      $("cols").dataset.pane = btn.dataset.pane;
+      for (const b of document.querySelectorAll("#narrow-switch [data-pane]")) b.setAttribute("aria-pressed", String(b === btn));
+      if (btn.dataset.pane === "preview") schedulePreview(0);
+    });
+  }
   $("template").addEventListener("change", (e) => { state.template = e.target.value; save(); schedulePreview(0); });
   $("show-sources").addEventListener("change", (e) => { state.showSources = e.target.checked; $("legend").hidden = !state.showSources; save(); schedulePreview(0); });
 
@@ -1489,7 +1496,7 @@ If the material already covers every requirement well, return an empty "question
   async function handleOpenRequest(req) {
     if (!req) return;
     await chrome.storage.local.remove(OPEN_KEY);
-    if (!req.jobId) return;
+    if (!req.jobId || Date.now() - (req.at || 0) > 120000) return; // a request nobody picked up in time is stale
     jobsCache = await getJobs();
     const job = jobsCache[req.jobId];
     if (!job) return;
