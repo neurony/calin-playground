@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { useRef, type RefObject } from "react";
 import type { OutputLanguage } from "@/lib/schema";
 
 export type InputState = {
@@ -15,17 +15,66 @@ type Props = {
   onChange: (value: InputState) => void;
   file: File | null;
   onFileChange: (file: File | null) => void;
+  jdFile: File | null;
+  onJdFileChange: (file: File | null) => void;
   onSubmit: () => void;
   loading: boolean;
 };
 
-export function InputForm({ value, onChange, file, onFileChange, onSubmit, loading }: Props) {
+const ACCEPT =
+  ".pdf,.docx,.txt,.md,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain";
+
+function FilePicker({
+  inputRef,
+  file,
+  onChange,
+}: {
+  inputRef: RefObject<HTMLInputElement | null>;
+  file: File | null;
+  onChange: (file: File | null) => void;
+}) {
+  return (
+    <div className="file-row">
+      <input
+        ref={inputRef}
+        type="file"
+        accept={ACCEPT}
+        onChange={(e) => onChange(e.target.files?.[0] ?? null)}
+      />
+      {file && (
+        <button
+          type="button"
+          className="button ghost"
+          onClick={() => {
+            onChange(null);
+            if (inputRef.current) inputRef.current.value = "";
+          }}
+        >
+          Elimină fișierul
+        </button>
+      )}
+    </div>
+  );
+}
+
+export function InputForm({
+  value,
+  onChange,
+  file,
+  onFileChange,
+  jdFile,
+  onJdFileChange,
+  onSubmit,
+  loading,
+}: Props) {
   const fileInput = useRef<HTMLInputElement>(null);
+  const jdFileInput = useRef<HTMLInputElement>(null);
   const set = <K extends keyof InputState>(key: K, v: InputState[K]) =>
     onChange({ ...value, [key]: v });
 
   const hasCandidateInfo = Boolean(file || value.cvText.trim() || value.extraInfo.trim());
-  const canSubmit = value.jobDescription.trim() && hasCandidateInfo && !loading;
+  const hasJobDescription = Boolean(jdFile || value.jobDescription.trim());
+  const canSubmit = hasJobDescription && hasCandidateInfo && !loading;
 
   return (
     <form
@@ -37,38 +86,23 @@ export function InputForm({ value, onChange, file, onFileChange, onSubmit, loadi
     >
       <section>
         <h2>1. Job description</h2>
-        <p className="muted">Lipește anunțul complet: responsabilități, cerințe, despre companie.</p>
+        <p className="muted">
+          Încarcă anunțul (PDF, DOCX, TXT) și/sau lipește-l ca text: responsabilități, cerințe,
+          despre companie.
+        </p>
+        <FilePicker inputRef={jdFileInput} file={jdFile} onChange={onJdFileChange} />
         <textarea
           rows={12}
           value={value.jobDescription}
           onChange={(e) => set("jobDescription", e.target.value)}
-          placeholder="Lipește aici job description-ul…"
+          placeholder="(Opțional dacă ai încărcat fișierul) Lipește aici job description-ul…"
         />
       </section>
 
       <section>
         <h2>2. CV-ul tău</h2>
         <p className="muted">Încarcă CV-ul (PDF, DOCX, TXT) și/sau lipește-l ca text.</p>
-        <div className="file-row">
-          <input
-            ref={fileInput}
-            type="file"
-            accept=".pdf,.docx,.txt,.md,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
-            onChange={(e) => onFileChange(e.target.files?.[0] ?? null)}
-          />
-          {file && (
-            <button
-              type="button"
-              className="button ghost"
-              onClick={() => {
-                onFileChange(null);
-                if (fileInput.current) fileInput.current.value = "";
-              }}
-            >
-              Elimină fișierul
-            </button>
-          )}
-        </div>
+        <FilePicker inputRef={fileInput} file={file} onChange={onFileChange} />
         <textarea
           rows={8}
           value={value.cvText}
@@ -107,7 +141,7 @@ export function InputForm({ value, onChange, file, onFileChange, onSubmit, loadi
           {loading ? "Se generează… (poate dura 1-2 minute)" : "Generează CV personalizat"}
         </button>
       </section>
-      {!hasCandidateInfo && value.jobDescription.trim() && (
+      {!hasCandidateInfo && hasJobDescription && (
         <p className="muted">Adaugă CV-ul sau informații despre experiența ta.</p>
       )}
     </form>

@@ -50,15 +50,21 @@ export function buildUserPrompt(input: {
   jobDescription: string;
   cvText: string;
   extraInfo: string;
+  hasJdDocument: boolean;
   hasCvDocument: boolean;
   language: OutputLanguage;
 }): string {
   const parts: string[] = [];
 
-  parts.push(`<job_description>\n${input.jobDescription.trim()}\n</job_description>`);
+  if (input.hasJdDocument) {
+    parts.push('The job description is attached above as the document titled "Job description".');
+  }
+  if (input.jobDescription.trim()) {
+    parts.push(`<job_description>\n${input.jobDescription.trim()}\n</job_description>`);
+  }
 
   if (input.hasCvDocument) {
-    parts.push("The candidate's current CV is attached above as a document.");
+    parts.push('The candidate\'s current CV is attached above as the document titled "Candidate CV".');
   }
   if (input.cvText.trim()) {
     parts.push(`<candidate_cv_text>\n${input.cvText.trim()}\n</candidate_cv_text>`);

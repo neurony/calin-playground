@@ -17,6 +17,42 @@ function errorResponse(message: string, status: number) {
   return NextResponse.json({ error: message }, { status });
 }
 
+type Upload =
+  | { document?: Anthropic.Beta.BetaContentBlockParam; text?: string }
+  | { error: string };
+
+// PDFs go to Claude as documents (it reads text and layout directly);
+// DOCX/TXT/MD are converted to plain text.
+async function readUpload(entry: FormDataEntryValue | null, title: string): Promise<Upload> {
+  if (!(entry instanceof File) || entry.size === 0) return {};
+  if (entry.size > MAX_FILE_BYTES) return { error: `Fișierul ${entry.name} depășește 10 MB.` };
+
+  const name = entry.name.toLowerCase();
+  const buffer = Buffer.from(await entry.arrayBuffer());
+
+  if (name.endsWith(".pdf") || entry.type === "application/pdf") {
+    return {
+      document: {
+        type: "document",
+        source: { type: "base64", media_type: "application/pdf", data: buffer.toString("base64") },
+        title,
+      },
+    };
+  }
+  if (name.endsWith(".docx")) {
+    try {
+      const { value } = await mammoth.extractRawText({ buffer });
+      return { text: value };
+    } catch {
+      return { error: `Nu am putut citi fișierul ${entry.name}.` };
+    }
+  }
+  if (name.endsWith(".txt") || name.endsWith(".md")) {
+    return { text: buffer.toString("utf8") };
+  }
+  return { error: `Format nesuportat (${entry.name}). Folosește PDF, DOCX, TXT sau MD.` };
+}
+
 export async function POST(request: Request) {
   let form: FormData;
   try {
@@ -25,53 +61,30 @@ export async function POST(request: Request) {
     return errorResponse("Cerere invalidă.", 400);
   }
 
-  const jobDescription = String(form.get("jobDescription") ?? "");
+  let jobDescription = String(form.get("jobDescription") ?? "");
   const extraInfo = String(form.get("extraInfo") ?? "");
   let cvText = String(form.get("cvText") ?? "");
   const languageRaw = String(form.get("language") ?? "auto");
   const language: OutputLanguage =
     languageRaw === "ro" || languageRaw === "en" ? languageRaw : "auto";
-  const file = form.get("cvFile");
-
-  if (!jobDescription.trim()) {
-    return errorResponse("Adaugă job description-ul.", 400);
-  }
 
   const content: Anthropic.Beta.BetaContentBlockParam[] = [];
-  let hasCvDocument = false;
 
-  if (file instanceof File && file.size > 0) {
-    if (file.size > MAX_FILE_BYTES) {
-      return errorResponse("Fișierul CV depășește 10 MB.", 400);
-    }
-    const name = file.name.toLowerCase();
-    const buffer = Buffer.from(await file.arrayBuffer());
+  const jd = await readUpload(form.get("jdFile"), "Job description");
+  if ("error" in jd) return errorResponse(jd.error, 400);
+  if (jd.document) content.push(jd.document);
+  if (jd.text) jobDescription = [jd.text, jobDescription].filter((s) => s.trim()).join("\n\n");
+  const hasJdDocument = Boolean(jd.document);
 
-    if (name.endsWith(".pdf") || file.type === "application/pdf") {
-      // Claude reads the PDF directly (text and layout), no local parsing needed.
-      content.push({
-        type: "document",
-        source: {
-          type: "base64",
-          media_type: "application/pdf",
-          data: buffer.toString("base64"),
-        },
-        title: "Candidate CV",
-      });
-      hasCvDocument = true;
-    } else if (name.endsWith(".docx")) {
-      try {
-        const { value } = await mammoth.extractRawText({ buffer });
-        cvText = [value, cvText].filter((s) => s.trim()).join("\n\n");
-      } catch {
-        return errorResponse("Nu am putut citi fișierul DOCX.", 400);
-      }
-    } else if (name.endsWith(".txt") || name.endsWith(".md")) {
-      cvText = [buffer.toString("utf8"), cvText].filter((s) => s.trim()).join("\n\n");
-    } else {
-      return errorResponse("Format nesuportat. Folosește PDF, DOCX, TXT sau MD.", 400);
-    }
+  if (!hasJdDocument && !jobDescription.trim()) {
+    return errorResponse("Adaugă job description-ul (fișier sau text).", 400);
   }
+
+  const cv = await readUpload(form.get("cvFile"), "Candidate CV");
+  if ("error" in cv) return errorResponse(cv.error, 400);
+  if (cv.document) content.push(cv.document);
+  if (cv.text) cvText = [cv.text, cvText].filter((s) => s.trim()).join("\n\n");
+  const hasCvDocument = Boolean(cv.document);
 
   if (!hasCvDocument && !cvText.trim() && !extraInfo.trim()) {
     return errorResponse(
@@ -82,7 +95,14 @@ export async function POST(request: Request) {
 
   content.push({
     type: "text",
-    text: buildUserPrompt({ jobDescription, cvText, extraInfo, hasCvDocument, language }),
+    text: buildUserPrompt({
+      jobDescription,
+      cvText,
+      extraInfo,
+      hasJdDocument,
+      hasCvDocument,
+      language,
+    }),
   });
 
   try {

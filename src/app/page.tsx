@@ -22,6 +22,7 @@ const emptyInput: InputState = { jobDescription: "", cvText: "", extraInfo: "", 
 export default function Home() {
   const [input, setInput] = useState<InputState>(emptyInput);
   const [file, setFile] = useState<File | null>(null);
+  const [jdFile, setJdFile] = useState<File | null>(null);
   const [result, setResult] = useState<Generation | null>(null);
   const [view, setView] = useState<"input" | "result">("input");
   const [loading, setLoading] = useState(false);
@@ -65,6 +66,7 @@ export default function Home() {
       body.set("extraInfo", input.extraInfo);
       body.set("language", input.language);
       if (file) body.set("cvFile", file);
+      if (jdFile) body.set("jdFile", jdFile);
 
       const res = await fetch("/api/generate", { method: "POST", body });
       const data = await res.json().catch(() => null);
@@ -115,6 +117,8 @@ export default function Home() {
           onChange={setInput}
           file={file}
           onFileChange={setFile}
+          jdFile={jdFile}
+          onJdFileChange={setJdFile}
           onSubmit={generate}
           loading={loading}
         />
