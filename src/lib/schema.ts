@@ -85,6 +85,27 @@ export const GenerationSchema = z.object({
   }),
 });
 
+// A clarifying question asked before generation, about a JD requirement the
+// candidate's material does not show (missing) or shows only vaguely (weak).
+export const QuestionSchema = z.object({
+  requirement: z.string(),
+  kind: z.enum(["missing", "weak"]),
+  why: z.string(),
+  question: z.string(),
+});
+
+export const QuestionsSchema = z.object({
+  questions: z.array(QuestionSchema),
+});
+
+// The candidate's reply to a question; `none` means "I don't have this experience".
+export const AnswerSchema = z.object({
+  requirement: z.string(),
+  question: z.string(),
+  answer: z.string(),
+  none: z.boolean(),
+});
+
 export type Cv = z.infer<typeof CvSchema>;
 export type Experience = z.infer<typeof ExperienceSchema>;
 export type Education = z.infer<typeof EducationSchema>;
@@ -92,5 +113,7 @@ export type Project = z.infer<typeof ProjectSchema>;
 export type Analysis = z.infer<typeof AnalysisSchema>;
 export type Generation = z.infer<typeof GenerationSchema>;
 export type SectionLabels = Generation["labels"];
+export type Question = z.infer<typeof QuestionSchema>;
+export type Answer = z.infer<typeof AnswerSchema>;
 
 export type OutputLanguage = "auto" | "ro" | "en";

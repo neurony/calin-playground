@@ -17,7 +17,10 @@ type Props = {
   onFileChange: (file: File | null) => void;
   jdFile: File | null;
   onJdFileChange: (file: File | null) => void;
+  // Analyse the inputs and ask clarifying questions (the default path).
   onSubmit: () => void;
+  // Generate the CV straight away, without questions.
+  onSkip: () => void;
   loading: boolean;
 };
 
@@ -65,6 +68,7 @@ export function InputForm({
   jdFile,
   onJdFileChange,
   onSubmit,
+  onSkip,
   loading,
 }: Props) {
   const fileInput = useRef<HTMLInputElement>(null);
@@ -137,9 +141,14 @@ export function InputForm({
             <option value="en">English</option>
           </select>
         </label>
-        <button type="submit" className="button primary" disabled={!canSubmit}>
-          {loading ? "Se generează… (poate dura 1-2 minute)" : "Generează CV personalizat"}
-        </button>
+        <div className="inline">
+          <button type="button" className="button ghost" disabled={!canSubmit} onClick={onSkip}>
+            Sari peste întrebări
+          </button>
+          <button type="submit" className="button primary" disabled={!canSubmit}>
+            {loading ? "Se lucrează… (poate dura 1-2 minute)" : "Continuă: întrebări despre experiența ta"}
+          </button>
+        </div>
       </section>
       {!hasCandidateInfo && hasJobDescription && (
         <p className="muted">Adaugă CV-ul sau informații despre experiența ta.</p>

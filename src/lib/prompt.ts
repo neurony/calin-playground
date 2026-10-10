@@ -1,4 +1,5 @@
-import type { OutputLanguage } from "./schema";
+import type { SourceInput } from "./inputs";
+import type { Answer, OutputLanguage } from "./schema";
 
 export const SYSTEM_PROMPT = `You tailor CVs to a specific job description. You work for the candidate, and the CV you produce will be sent to a real recruiter under the candidate's name, so it has to be both truthful and pleasant to read.
 
@@ -61,14 +62,8 @@ export function languageInstruction(language: OutputLanguage): string {
   }
 }
 
-export function buildUserPrompt(input: {
-  jobDescription: string;
-  cvText: string;
-  extraInfo: string;
-  hasJdDocument: boolean;
-  hasCvDocument: boolean;
-  language: OutputLanguage;
-}): string {
+// The job description and the candidate's material, shared by both prompts.
+function sourceParts(input: SourceInput): string[] {
   const parts: string[] = [];
 
   if (input.hasJdDocument) {
@@ -89,6 +84,25 @@ export function buildUserPrompt(input: {
       `<candidate_extra_information>\nAdditional information the candidate wrote about their professional experience. Treat it as equally valid source material as the CV.\n\n${input.extraInfo.trim()}\n</candidate_extra_information>`,
     );
   }
+  return parts;
+}
+
+function answersPart(answers: Answer[]): string | null {
+  const given = answers.filter((a) => a.none || a.answer.trim());
+  if (!given.length) return null;
+  const items = given.map(
+    (a) =>
+      `Requirement: ${a.requirement}\nQuestion: ${a.question}\nAnswer: ${
+        a.none ? "I don't have experience with this." : a.answer.trim()
+      }`,
+  );
+  return `<candidate_answers>\nThe candidate's answers to clarifying questions about the job's requirements. They are source material written by the candidate, as valid as the CV: put what they say into the matching role or section. Where the candidate says they have no such experience, the requirement stays a gap and nothing about it goes into the CV.\n\n${items.join("\n\n")}\n</candidate_answers>`;
+}
+
+export function buildUserPrompt(input: SourceInput, answers: Answer[] = []): string {
+  const parts = sourceParts(input);
+  const answered = answersPart(answers);
+  if (answered) parts.push(answered);
 
   parts.push(languageInstruction(input.language));
   parts.push(
@@ -96,4 +110,30 @@ export function buildUserPrompt(input: {
   );
 
   return parts.join("\n\n");
+}
+
+export const QUESTIONS_SYSTEM_PROMPT = `You help a candidate prepare a CV tailored to a job description. Before the CV is written, find where the candidate's material does not show what the job asks for, and ask the candidate about it, so the CV can include real experience they forgot to mention.
+
+Compare the job description (must-have requirements first, then responsibilities, then nice-to-haves) with the candidate's material, and find:
+- missing: requirements with no evidence at all in the candidate's material;
+- weak: requirements with thin evidence, e.g. a technology listed without context, or unclear depth, duration, scale, ownership or results.
+
+Then write the questions:
+- 3 to 8 questions, most important requirement first. One topic per question. Skip anything the material already shows clearly.
+- Make each question specific and answerable in one to three sentences. Refer to the candidate's real roles where it helps ("At Fintech Exemplu you mention AWS: which services did you run there, and were you responsible for them in production?").
+- Ask for concrete facts: what, where, when, which tools, at what scale, with what result.
+- Never assume the candidate has the experience, and make it easy to say no. No leading questions.
+- Do not ask about personal data (age, family, health), salary or availability.
+- Plain, friendly wording, addressing the candidate directly.
+
+For each question return the requirement (a short name), its kind (missing or weak), why (one sentence on what is missing or unclear in the candidate's material) and the question itself. If the material already covers every requirement well, return an empty list.`;
+
+export function buildQuestionsPrompt(input: SourceInput): string {
+  const language =
+    input.language === "ro"
+      ? "Write the questions in Romanian."
+      : input.language === "en"
+        ? "Write the questions in English."
+        : "Write the questions in the same language as the job description.";
+  return [...sourceParts(input), language, "Find the gaps and write the questions."].join("\n\n");
 }

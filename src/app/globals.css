@@ -102,6 +102,10 @@ select {
 textarea {
   resize: vertical;
 }
+input[type="checkbox"] {
+  width: auto;
+  margin: 0;
+}
 input[type="file"] {
   width: auto;
   background: transparent;
@@ -286,4 +290,56 @@ label.inline {
   align-items: center;
   justify-content: center;
   color: #666;
+}
+
+/* Questions step */
+.questions .question {
+  display: grid;
+  gap: 8px;
+}
+.questions .question.done {
+  border-color: var(--ok);
+}
+.question-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  align-items: baseline;
+}
+.kind {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  padding: 0 6px;
+}
+.kind.missing {
+  color: var(--danger);
+}
+.kind.weak {
+  color: var(--accent);
+}
+.question-text {
+  font-size: 1.02rem;
+}
+.questions .question p {
+  margin: 0;
+}
+.questions .question label.inline {
+  width: fit-content;
+  cursor: pointer;
+}
+.small {
+  font-size: 0.86rem;
+}
+.inline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.tabs .button:disabled {
+  opacity: 0.45;
 }

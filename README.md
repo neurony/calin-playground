@@ -7,6 +7,7 @@ Aplicație locală (Next.js) care primește un job description și CV-ul tău ș
 ## Ce face
 
 - **Input:** job description (upload PDF / DOCX / TXT și/sau text lipit) + CV (upload PDF / DOCX / TXT și/sau text lipit) + informații suplimentare scrise liber (proiecte, tehnologii, rezultate care nu apar în CV).
+- **Întrebări înainte de generare:** Claude compară CV-ul cu anunțul și te întreabă despre cerințele care lipsesc sau apar vag în CV. Răspunsurile tale devin material pentru CV; ce marchezi ca „Nu am experiență cu asta” rămâne neadăugat. Pasul se poate sări.
 - **Generare cu Claude:** CV structurat, scris pe un ton natural, fără clișee de tipul „orientat spre rezultate”.
 - **Analiză:** ce cerințe sunt acoperite (și de ce experiență), ce lipsește, ce s-a accentuat.
 - **Editare:** modifici orice câmp înainte de export; previzualizarea PDF se actualizează pe loc.
@@ -30,9 +31,13 @@ Deschide http://localhost:3000.
 
 | Fișier | Rol |
 |---|---|
-| `src/app/api/generate/route.ts` | Primește formularul, citește JD-ul și CV-ul (PDF trimis direct la Claude, DOCX prin `mammoth`) și cere modelului un răspuns structurat |
-| `src/lib/prompt.ts` | Prompt-ul: reguli de veridicitate, cum se face adaptarea, tonul |
+| `src/app/api/questions/route.ts` | Pasul 2: compară CV-ul cu anunțul și generează întrebări despre lacune |
+| `src/app/api/generate/route.ts` | Pasul 3: generează CV-ul din date și din răspunsurile la întrebări |
+| `src/lib/inputs.ts` | Citește JD-ul și CV-ul din formular (PDF trimis direct la Claude, DOCX prin `mammoth`) |
+| `src/lib/claude.ts` | Apelul către Claude cu structured outputs și tratarea erorilor |
+| `src/lib/prompt.ts` | Prompt-urile: întrebările despre lacune; generarea (reguli de veridicitate, păstrarea întregului conținut, accentul, tonul) |
 | `src/lib/schema.ts` | Schema Zod a CV-ului și a analizei (folosită pentru structured outputs și în UI) |
+| `src/components/QuestionsStep.tsx` | Pasul cu întrebări |
 | `src/components/CvEditor.tsx` | Editorul CV-ului |
 | `src/components/CvDocument.tsx` | Template-ul PDF (`@react-pdf/renderer`) |
 | `src/components/PdfPreview.tsx` | Previzualizare live și descărcare |
