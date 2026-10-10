@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, type RefObject } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
 import type { OutputLanguage } from "@/lib/schema";
 
 export type InputState = {
@@ -19,8 +19,10 @@ type Props = {
   onJdFileChange: (file: File | null) => void;
   // Analyse the inputs and ask clarifying questions (the default path).
   onSubmit: () => void;
-  // Generate the CV straight away, without questions.
+  // Go to step 2 without questions (only the extra information field).
   onSkip: () => void;
+  // Clear everything (inputs, files, questions, answers, generated CV) for a new role.
+  onReset: () => void;
   loading: boolean;
 };
 
@@ -69,16 +71,35 @@ export function InputForm({
   onJdFileChange,
   onSubmit,
   onSkip,
+  onReset,
   loading,
 }: Props) {
   const fileInput = useRef<HTMLInputElement>(null);
   const jdFileInput = useRef<HTMLInputElement>(null);
+  // Reset takes two clicks: the first asks for confirmation for a few seconds.
+  const [confirmingReset, setConfirmingReset] = useState(false);
+  useEffect(() => {
+    if (!confirmingReset) return;
+    const timer = setTimeout(() => setConfirmingReset(false), 4000);
+    return () => clearTimeout(timer);
+  }, [confirmingReset]);
+
+  function handleReset() {
+    if (!confirmingReset) {
+      setConfirmingReset(true);
+      return;
+    }
+    setConfirmingReset(false);
+    if (fileInput.current) fileInput.current.value = "";
+    if (jdFileInput.current) jdFileInput.current.value = "";
+    onReset();
+  }
   const set = <K extends keyof InputState>(key: K, v: InputState[K]) =>
     onChange({ ...value, [key]: v });
 
-  const hasCandidateInfo = Boolean(file || value.cvText.trim() || value.extraInfo.trim());
+  const hasCv = Boolean(file || value.cvText.trim());
   const hasJobDescription = Boolean(jdFile || value.jobDescription.trim());
-  const canSubmit = hasJobDescription && hasCandidateInfo && !loading;
+  const canSubmit = hasJobDescription && hasCv && !loading;
 
   return (
     <form
@@ -115,21 +136,17 @@ export function InputForm({
         />
       </section>
 
-      <section>
-        <h2>3. Informații suplimentare</h2>
-        <p className="muted">
-          Ce nu apare în CV: proiecte, tehnologii, responsabilități, rezultate. Doar lucruri reale;
-          aplicația nu inventează nimic, dar poate folosi tot ce scrii aici.
-        </p>
-        <textarea
-          rows={8}
-          value={value.extraInfo}
-          onChange={(e) => set("extraInfo", e.target.value)}
-          placeholder="Ex.: Am condus migrarea către AWS a 3 servicii în 2023; lucrez zilnic cu PostgreSQL…"
-        />
-      </section>
-
       <section className="form-footer">
+        <div className="inline">
+        <button
+          type="button"
+          className="button ghost danger"
+          disabled={loading}
+          onClick={handleReset}
+          title="Șterge anunțul, CV-ul, întrebările, răspunsurile și CV-ul generat"
+        >
+          {confirmingReset ? "Sigur? Apasă din nou pentru a șterge tot" : "Resetează tot"}
+        </button>
         <label className="inline">
           Limba CV-ului:
           <select
@@ -141,8 +158,14 @@ export function InputForm({
             <option value="en">English</option>
           </select>
         </label>
+        </div>
         <div className="inline">
-          <button type="button" className="button ghost" disabled={!canSubmit} onClick={onSkip}>
+          <button
+            type="button"
+            className="button ghost"
+            disabled={!hasJobDescription || loading}
+            onClick={onSkip}
+          >
             Sari peste întrebări
           </button>
           <button type="submit" className="button primary" disabled={!canSubmit}>
@@ -150,8 +173,11 @@ export function InputForm({
           </button>
         </div>
       </section>
-      {!hasCandidateInfo && hasJobDescription && (
-        <p className="muted">Adaugă CV-ul sau informații despre experiența ta.</p>
+      {!hasCv && hasJobDescription && (
+        <p className="muted">
+          Adaugă CV-ul ca să primești întrebări. Fără CV, poți sări peste întrebări și descrie
+          experiența la pasul 2, în „Informații suplimentare”.
+        </p>
       )}
     </form>
   );

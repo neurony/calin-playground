@@ -21,6 +21,7 @@ type View = "input" | "questions" | "result";
 type Saved = {
   input: InputState;
   questions?: Question[] | null;
+  questionsSkipped?: boolean;
   answers?: Answer[];
   result: Generation | null;
 };
@@ -39,6 +40,7 @@ export default function Home() {
   const [jdFile, setJdFile] = useState<File | null>(null);
   const [questions, setQuestions] = useState<Question[] | null>(null);
   const [answers, setAnswers] = useState<Answer[]>([]);
+  const [questionsSkipped, setQuestionsSkipped] = useState(false);
   const [result, setResult] = useState<Generation | null>(null);
   const [view, setView] = useState<View>("input");
   const [loading, setLoading] = useState(false);
@@ -55,6 +57,7 @@ export default function Home() {
         if (saved.questions) {
           setQuestions(saved.questions);
           setAnswers(saved.answers ?? []);
+          setQuestionsSkipped(saved.questionsSkipped ?? false);
           setView("questions");
         }
         if (saved.result) {
@@ -73,12 +76,12 @@ export default function Home() {
     try {
       localStorage.setItem(
         STORAGE_KEY,
-        JSON.stringify({ input, questions, answers, result } satisfies Saved),
+        JSON.stringify({ input, questions, questionsSkipped, answers, result } satisfies Saved),
       );
     } catch {
       // Ignore unavailable storage.
     }
-  }, [input, questions, answers, result, restored]);
+  }, [input, questions, questionsSkipped, answers, result, restored]);
 
   // Posts the inputs (plus any extra fields) to an API route and returns its JSON.
   async function post<T>(path: string, extra: Record<string, string> = {}): Promise<T | null> {
@@ -112,6 +115,7 @@ export default function Home() {
     const data = await post<{ questions: Question[] }>("/api/questions");
     if (!data) return;
     setQuestions(data.questions);
+    setQuestionsSkipped(false);
     setAnswers(
       data.questions.map((q) => ({
         requirement: q.requirement,
@@ -131,10 +135,30 @@ export default function Home() {
   }
 
   function skipQuestions() {
+    setError(null);
+    setQuestions([]);
+    setAnswers([]);
+    setQuestionsSkipped(true);
+    setView("questions");
+  }
+
+  function resetAll() {
+    setInput({ ...emptyInput, language: input.language });
+    setFile(null);
+    setJdFile(null);
     setQuestions(null);
     setAnswers([]);
-    generate([]);
+    setQuestionsSkipped(false);
+    setResult(null);
+    setError(null);
+    setView("input");
+    window.scrollTo({ top: 0 });
   }
+
+  const canGenerate = Boolean(
+    (jdFile || input.jobDescription.trim()) &&
+      (file || input.cvText.trim() || input.extraInfo.trim()),
+  );
 
   const available: Record<View, boolean> = {
     input: true,
@@ -177,6 +201,7 @@ export default function Home() {
           onJdFileChange={setJdFile}
           onSubmit={askQuestions}
           onSkip={skipQuestions}
+          onReset={resetAll}
           loading={loading}
         />
       )}
@@ -186,6 +211,10 @@ export default function Home() {
           questions={questions}
           answers={answers}
           onChange={setAnswers}
+          skipped={questionsSkipped}
+          extraInfo={input.extraInfo}
+          onExtraInfoChange={(extraInfo) => setInput({ ...input, extraInfo })}
+          canGenerate={canGenerate}
           onBack={() => setView("input")}
           onGenerate={() => generate(answers)}
           loading={loading}
