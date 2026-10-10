@@ -331,6 +331,7 @@ test("full flow: questions, writing, completeness check, rewrite, preview, PDF, 
   // The validated prompts are the artifact's.
   expect(mock.of("generate")[0].text).toContain("## Truthfulness comes first");
   expect(mock.of("generate")[0].text).toContain("## Voice: match the job description's professional register");
+  expect(mock.of("generate")[0].text).toContain("## Consistent quality across the whole CV");
   expect(mock.of("rewrite")[0].text).toContain("## Voice: match the job description's professional register");
   expect(mock.of("generate")[0].text).toContain("<candidate_answers>");
   expect(mock.of("generate")[0].text).toContain("I don't have experience with this.");
