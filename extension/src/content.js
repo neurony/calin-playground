@@ -53,19 +53,53 @@
   const clean = (s) => (s || "").replace(/[ \t\u00a0]+/g, " ").replace(/ *\n */g, "\n").replace(/\n{2,}/g, "\n").trim();
   function firstText(list, min = 1) {
     for (const sel of list) {
-      for (const el of document.querySelectorAll(sel)) {
+      let els;
+      try { els = document.querySelectorAll(sel); } catch { continue; }
+      for (const el of els) {
         const t = clean(el.innerText || el.textContent);
         if (t.length >= min) return t;
       }
     }
     return "";
   }
+
+  // LinkedIn changes its class names often. When none of the known ones match, the description is found
+  // by its heading ("About the job", also in other interface languages), then by generic attributes.
+  const DESCRIPTION_HEADING = /^(about the job|about this job|job description|despre (acest )?(job|post|loc de munc[aă])|descrierea (jobului|postului)|informa[tț]ii despre (job|post)|à propos de l[’']offre( d[’']emploi)?|à propos de cet emploi|über den job|über diese stelle|acerca del empleo|sobre el empleo|informazioni sull[’']offerta( di lavoro)?|sobre a vaga|o ofercie( pracy)?|over de vacature)(?!\p{L})/iu;
+  function textByHeading() {
+    const root = document.querySelector("main") || document.body;
+    for (const el of root.querySelectorAll("h1, h2, h3, h4, strong, span, div, p")) {
+      if (el.children.length > 2) continue;
+      const label = clean(el.textContent);
+      if (label.length > 60 || !DESCRIPTION_HEADING.test(label)) continue;
+      // The first ancestor with a real amount of text is the description section.
+      let node = el;
+      while (node.parentElement && node !== root) {
+        node = node.parentElement;
+        const t = clean(node.innerText || node.textContent);
+        if (t.length >= 300) { if (t.length <= 30000) return t; break; }
+      }
+    }
+    return "";
+  }
+  const GENERIC_DESCRIPTION = ["[data-testid*='description' i]", "[class*='description' i]", "[data-testid='expandable-text-box']"];
+  function descriptionText() {
+    return firstText(SELECTORS.description, 200) || textByHeading() || firstText(GENERIC_DESCRIPTION, 300) || firstText(SELECTORS.description, 50);
+  }
+
+  // The page title of a job ad reads "Job title | Company | LinkedIn": a fallback for title and company.
+  function fromPageTitle() {
+    const parts = document.title.replace(/^\(\d+\)\s*/, "").split(" | ").map((x) => x.trim());
+    return parts.length >= 3 && /linkedin/i.test(parts[parts.length - 1]) ? { title: parts[0], company: parts[1] } : {};
+  }
+
   function readJob() {
+    const page = jobIdFromUrl(location.href) && /^\/jobs\/view\//.test(location.pathname) ? fromPageTitle() : {};
     return {
-      title: firstText(SELECTORS.title).split("\n")[0].slice(0, 200),
-      company: firstText(SELECTORS.company).split("\n")[0].slice(0, 200),
+      title: (firstText(SELECTORS.title).split("\n")[0] || page.title || "").slice(0, 200),
+      company: (firstText(SELECTORS.company).split("\n")[0] || page.company || "").slice(0, 200),
       location: firstText(SELECTORS.location).split("\n")[0].slice(0, 200),
-      text: firstText(SELECTORS.description, 50),
+      text: descriptionText(),
     };
   }
 
@@ -96,7 +130,10 @@
       const fresh = job.text && (job.text !== lastSentText || waited > 6000);
       const stable = prev && prev.text === job.text && prev.title === job.title;
       if (job.text.length >= 200 && fresh && stable) return finish(job);
-      if (waited > GIVE_UP_MS) return finish(job.text !== lastSentText ? job : { ...job, text: "" });
+      if (waited > GIVE_UP_MS) {
+        if (job.text.length < 200) console.info("[CV Tailor] Could not find the job description on this page.", { title: job.title, chars: job.text.length });
+        return finish(job.text !== lastSentText ? job : { ...job, text: "" });
+      }
       prev = job;
       setTimeout(tick, POLL_MS);
     };

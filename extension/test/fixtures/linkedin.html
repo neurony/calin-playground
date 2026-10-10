@@ -81,6 +81,12 @@ Keep our telecom platform reliable: monitoring, incident response and automation
 Requirements: 3+ years in operations or SRE; Linux; Prometheus and Grafana; on-call rotations. (marker: SRE-JOB-SIX)`,
   },
 };
+// A job page in a newer layout: no known class names (hashed ones instead), only the "About the job"
+// heading and the page title ("Job title | Company | LinkedIn") to go by.
+const NEW_LAYOUT = {
+  id: "4000000007", title: "Backend Engineer (new layout)", company: "Example Logistics",
+  text: ["We move parcels for 2,000 online shops and need help with our order APIs.", "What you will do:", "- Build Java and Spring Boot services", "- Run them on AWS with Terraform", "Requirements:", "- 4+ years of Java", "- PostgreSQL", "- English (marker: NEW-LAYOUT-SEVEN)"],
+};
 const SEARCH_LIST = ["4000000002", "4000000003", "4000000004", "4000000005", "4000000006"];
 const app = document.getElementById("app");
 
@@ -97,6 +103,12 @@ function description(job) {
 function render() {
   const path = location.pathname;
   const view = path.match(/^\/jobs\/view\/(\d+)/);
+  if (view && view[1] === NEW_LAYOUT.id) {
+    document.title = `${NEW_LAYOUT.title} | ${NEW_LAYOUT.company} | LinkedIn`;
+    app.innerHTML = `<main class="_a1b2c3"><div class="_x9f2"><div class="_h77"><p class="_t1">${NEW_LAYOUT.title}</p><p class="_t2"><a href="#">${NEW_LAYOUT.company}</a></p></div>
+      <div class="_k3l" data-sdui-component="job-body"><h2 class="_q8">About the job</h2><div class="_p0">${NEW_LAYOUT.text.map((l) => `<p>${l}</p>`).join("")}</div></div></div></main>`;
+    return;
+  }
   if (view) {
     const job = JOBS[view[1]];
     app.innerHTML = `<main class="jobs-details"><div class="jobs-details__main-content">${topCard(job)}${description(job)}</div></main>`;

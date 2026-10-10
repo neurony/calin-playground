@@ -184,10 +184,20 @@ test("search view: follows currentJobId, waits for the new description and debou
   expect(scoreCalls()).toHaveLength(4);
 });
 
+test("a job page in an unknown layout is read by its heading and page title", async () => {
+  await jobPage.goto("https://www.linkedin.com/jobs/view/4000000007/");
+  await expect.poll(() => badgeText(), { timeout: 15_000 }).toBe("50");
+  const last = scoreCalls().at(-1);
+  expect(last.text).toContain("NEW-LAYOUT-SEVEN");
+  expect(last.text).toContain("Backend Engineer (new layout)");
+  expect(last.text).toContain("Example Logistics");
+  expect(scoreCalls()).toHaveLength(5);
+});
+
 test("pages that are not job ads have no badge", async () => {
   await jobPage.goto("https://www.linkedin.com/feed/");
   await expect.poll(() => badgeText(), { timeout: 10_000 }).toBe("");
-  expect(scoreCalls()).toHaveLength(4);
+  expect(scoreCalls()).toHaveLength(5);
 });
 
 test("with auto-score off nothing is sent; turning it on scores the open job", async () => {
@@ -199,13 +209,13 @@ test("with auto-score off nothing is sent; turning it on scores the open job", a
   await jobPage.goto(SEARCH("4000000006"));
   await jobPage.waitForTimeout(3500);
   expect(await badgeText()).toBe("");
-  expect(scoreCalls()).toHaveLength(4);
+  expect(scoreCalls()).toHaveLength(5);
 
   await app.bringToFront();
   await app.check("#auto-score");
   await jobPage.bringToFront();
   await expect.poll(() => badgeText(), { timeout: 15_000 }).toBe("44");
-  expect(scoreCalls()).toHaveLength(5);
+  expect(scoreCalls()).toHaveLength(6);
 });
 
 test("the toolbar button opens the app in a popup window with the job filled in", async () => {
@@ -225,7 +235,7 @@ test("the toolbar button opens the app in a popup window with the job filled in"
   await expect(app.locator("#cv-text")).toHaveValue(new RegExp(CV_NAME));
   await expect(app.locator("#linkedin-job")).toContainText("Fit 82/100");
   await expect(app.locator("#linkedin-job")).toContainText("Strong fit");
-  expect(scoreCalls()).toHaveLength(5);
+  expect(scoreCalls()).toHaveLength(6);
   await shot(app, "1-details-from-linkedin");
 });
 
