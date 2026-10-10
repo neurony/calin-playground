@@ -109,6 +109,18 @@ export function InputForm({
         if (canSubmit) onSubmit();
       }}
     >
+      <div className="reset-bar">
+        <button
+          type="button"
+          className="button ghost danger"
+          disabled={loading}
+          onClick={handleReset}
+          title="Șterge anunțul, CV-ul, întrebările, răspunsurile și CV-ul generat"
+        >
+          {confirmingReset ? "Sigur? Apasă din nou pentru a șterge tot" : "Resetează tot"}
+        </button>
+      </div>
+
       <section>
         <h2>1. Job description</h2>
         <p className="muted">
@@ -137,16 +149,6 @@ export function InputForm({
       </section>
 
       <section className="form-footer">
-        <div className="inline">
-        <button
-          type="button"
-          className="button ghost danger"
-          disabled={loading}
-          onClick={handleReset}
-          title="Șterge anunțul, CV-ul, întrebările, răspunsurile și CV-ul generat"
-        >
-          {confirmingReset ? "Sigur? Apasă din nou pentru a șterge tot" : "Resetează tot"}
-        </button>
         <label className="inline">
           Limba CV-ului:
           <select
@@ -158,7 +160,6 @@ export function InputForm({
             <option value="en">English</option>
           </select>
         </label>
-        </div>
         <div className="inline">
           <button
             type="button"

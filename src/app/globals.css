@@ -343,3 +343,8 @@ label.inline {
 .tabs .button:disabled {
   opacity: 0.45;
 }
+.reset-bar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
