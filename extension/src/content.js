@@ -1,7 +1,48 @@
-// Runs on linkedin.com. Notices when a job ad is open (a /jobs/view/<id> page, or the job panel of a
-// search with ?currentJobId=<id>) and hands its text to the service worker. Nothing leaves the browser
-// from here; the worker decides whether to score it.
-(() => {
+// Runs on every page. On linkedin.com it notices when a job ad is open (a /jobs/view/<id> page, or the
+// job panel of a search with ?currentJobId=<id>); on other sites it checks, locally, whether the page
+// looks like a job ad. Either way it hands the text to the service worker, which decides whether to
+// score it. Nothing leaves the browser from here.
+import { collectPage, looksLikeJobAd } from "./shared/collect.js";
+
+const isLinkedIn = /(^|\.)linkedin\.com$/.test(location.hostname);
+
+function send(msg) {
+  try { chrome.runtime.sendMessage(msg).catch(() => {}); } catch { /* the extension was reloaded */ }
+}
+
+// ---------- Any other site ----------
+if (!isLinkedIn && window.top === window && document.contentType !== "application/pdf") (() => {
+  const SETTLE_MS = 1500, STABLE_MS = 800;
+  let lastHref = null, run = 0, wasCandidate = false;
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  async function onUrlChange() {
+    const myRun = ++run;
+    await sleep(SETTLE_MS);
+    let settings = {};
+    try { settings = (await chrome.storage.local.get("settings")).settings || {}; } catch { return; }
+    if (settings.autoScore === false || myRun !== run) return;
+    // Wait for the text to stop changing (single-page sites load the ad after the URL changes).
+    let page = await collectPage();
+    for (let i = 0; i < 4; i++) {
+      await sleep(STABLE_MS);
+      if (myRun !== run) return;
+      const again = await collectPage();
+      const same = again.text === page.text;
+      page = again;
+      if (same) break;
+    }
+    const remote = page.gdocId || page.driveFileId || (page.pdfUrls.length && page.text.length < 400);
+    if (page.jsonld || remote || looksLikeJobAd(page)) { wasCandidate = true; send({ type: "web-page", page }); }
+    else if (wasCandidate || myRun === 1) { wasCandidate = false; send({ type: "not-job" }); }
+  }
+  const check = () => { if (location.href !== lastHref) { lastHref = location.href; onUrlChange(); } };
+  setInterval(check, 700);
+  window.addEventListener("popstate", check);
+  check();
+})();
+
+// ---------- LinkedIn ----------
+if (isLinkedIn) (() => {
   const SELECTORS = {
     title: [
       ".job-details-jobs-unified-top-card__job-title",
@@ -101,10 +142,6 @@
       location: firstText(SELECTORS.location).split("\n")[0].slice(0, 200),
       text: descriptionText(),
     };
-  }
-
-  function send(msg) {
-    try { chrome.runtime.sendMessage(msg).catch(() => {}); } catch { /* the extension was reloaded */ }
   }
 
   const SETTLE_MS = 1000;   // debounce after the URL changes (people click through jobs quickly)

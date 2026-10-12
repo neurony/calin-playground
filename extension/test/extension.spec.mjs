@@ -7,6 +7,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { installAnthropicMock, GOOD_KEY, CV_NAME } from "./mock-anthropic.mjs";
 import { zip } from "../zip.mjs";
+import { WEB, WEB_HOSTS } from "./fixtures/web.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const EXT = path.resolve(here, "../dist");
@@ -91,6 +92,12 @@ test.beforeAll(async () => {
     args: ["--screen-info={1600x1000}", "--window-size=1500,960", `--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`],
   });
   await context.route("https://*.linkedin.com/**", (route) => route.fulfill({ status: 200, contentType: "text/html; charset=utf-8", body: FIXTURE }));
+  await context.route((url) => WEB_HOSTS.includes(url.hostname), (route) => {
+    const make = WEB[route.request().url()];
+    if (!make) return route.fulfill({ status: 404, contentType: "text/plain", body: "not found" });
+    const { contentType, body } = make();
+    return route.fulfill({ status: 200, contentType, body });
+  });
   mock = await installAnthropicMock(context);
   sw = context.serviceWorkers()[0] || (await context.waitForEvent("serviceworker"));
   extId = new URL(sw.url()).host;
@@ -384,7 +391,7 @@ test("unsaved answers: the app asks before loading another job", async () => {
   await app.click("#pending-job >> text=Keep the current role");
   await expect(app.locator("#jd")).toHaveValue(/Kubernetes Platform Engineer/);
   await clickToolbar();
-  await app.click("#pending-job >> text=Load the LinkedIn job");
+  await app.click("#pending-job >> text=Load this job");
   await expect(app.locator("#jd")).toHaveValue(/Senior Backend Engineer – Payments/);
   await expect(app.locator("#tab-questions")).toBeDisabled();
 });
@@ -427,7 +434,102 @@ test("file upload: a text PDF, a DOCX and a scanned PDF (read by Claude)", async
   expect(images[0].source.media_type).toBe("image/jpeg");
 });
 
+test("any site: a job ad in the standard format (schema.org) is scored without asking Claude what it is", async () => {
+  await jobPage.goto("https://careers.example-company.com/jobs/platform-backend-engineer");
+  await expect.poll(() => badgeText(), { timeout: 20_000 }).toMatch(/^\d+$/);
+  expect(mock.of("extract")).toHaveLength(0);
+  const last = scoreCalls().at(-1);
+  expect(last.text).toContain("JSONLD-JOB");
+  expect(last.text).toContain("Platform Backend Engineer");
+  expect(last.text).toContain("Example Company");
+});
+
+test("any site: a page that looks like a job ad is checked by Claude, which picks the ad out of it", async () => {
+  await jobPage.goto("https://www.example-jobs.ro/oferta/12345");
+  await expect.poll(() => badgeText(), { timeout: 20_000 }).toMatch(/^\d+$/);
+  expect(mock.of("extract")).toHaveLength(1);
+  const extract = mock.of("extract")[0];
+  expect(extract.model).toBe("claude-haiku-5-5");
+  expect(extract.body.output_config.effort).toBe("low");
+  expect(extract.text).toContain("Similar jobs"); // the whole page goes to Claude...
+  const last = scoreCalls().at(-1);
+  expect(last.text).toContain("GENERIC-JOB"); // ...and only the ad is scored
+  expect(last.text).toContain("Cloud Support Engineer");
+  expect(last.text).not.toContain("Similar jobs");
+  expect(last.text).not.toContain("Cookie settings");
+});
+
+test("any site: an article sends nothing; a careers page listing several jobs is asked about once", async () => {
+  const before = mock.calls.length;
+  await jobPage.goto("https://blog.example.org/how-we-work");
+  await jobPage.waitForTimeout(4500);
+  expect(await badgeText()).toBe("");
+  expect(mock.calls.length).toBe(before);
+
+  await jobPage.goto("https://careers.example-company.com/");
+  await expect.poll(() => mock.of("extract").length, { timeout: 20_000 }).toBe(2);
+  await jobPage.waitForTimeout(500);
+  expect(await badgeText()).toBe("");
+  await jobPage.goto("https://blog.example.org/how-we-work");
+  await jobPage.goto("https://careers.example-company.com/");
+  await jobPage.waitForTimeout(4500);
+  expect(mock.of("extract")).toHaveLength(2); // Claude's answer for this page is remembered
+  expect(await badgeText()).toBe("");
+});
+
+test("any site: Google Docs, files in Google Drive, PDFs inside a page and PDF files are read too", async () => {
+  await jobPage.goto("https://docs.google.com/document/d/DOC123/edit");
+  await expect.poll(() => scoreCalls().at(-1).text.includes("GDOC-JOB"), { timeout: 20_000 }).toBe(true);
+  await expect.poll(() => badgeText()).toMatch(/^\d+$/);
+
+  await jobPage.goto("https://drive.google.com/file/d/FILE456/view");
+  await expect.poll(() => scoreCalls().at(-1).text.includes("DRIVE-PDF-JOB"), { timeout: 20_000 }).toBe(true);
+  await expect.poll(() => badgeText()).toMatch(/^\d+$/);
+
+  await jobPage.goto("https://www.example-jobs.ro/pdf-ad");
+  await expect.poll(() => scoreCalls().at(-1).text.includes("EMBED-PDF-JOB"), { timeout: 20_000 }).toBe(true);
+  await expect.poll(() => badgeText()).toMatch(/^\d+$/);
+
+  // Chrome's PDF viewer runs no content scripts; the worker reads the file itself.
+  const file = await sw.evaluate((url) => globalThis.cvTailor.readUrl(url), "https://files.example.com/jd/devops.pdf");
+  expect(file.text).toContain("PDF-FILE-JOB");
+  expect(file.text).toContain("DevOps Engineer");
+});
+
+test("toolbar button on any page: reads it and loads the ad after confirmation", async () => {
+  await jobPage.goto("https://smallco.example.net/hiring"); // too short for the local check: no badge
+  await jobPage.waitForTimeout(3500);
+  expect(await badgeText()).toBe("");
+  const extracts = mock.of("extract").length;
+  await clickToolbar();
+  await expect(app.locator("#pending-job")).toContainText("Job ad found on this page", { timeout: 20_000 });
+  await expect(app.locator("#pending-job")).toContainText("Node.js Developer · SmallCo");
+  expect(mock.of("extract")).toHaveLength(extracts + 1);
+  await app.click("#pending-job >> text=Use this page as the job description");
+  await expect(app.locator("#jd")).toHaveValue(/SmallCo builds booking software for dentists/);
+  await expect(app.locator("#jd")).not.toHaveValue(/AD-START/);
+  await expect(app.locator("#linkedin-job")).toContainText("smallco.example.net");
+  // From now on the page is a known job ad: the icon shows its score.
+  await expect.poll(() => badgeText(), { timeout: 20_000 }).toMatch(/^\d+$/);
+});
+
+test("toolbar button: a page without a job ad, and a scanned PDF read by Claude", async () => {
+  await jobPage.goto("https://blog.example.org/how-we-work");
+  await jobPage.waitForTimeout(2500);
+  await clickToolbar();
+  await expect(app.locator("#pending-job")).toContainText("does not look like a job ad", { timeout: 20_000 });
+
+  const transcribed = mock.of("transcribe").length;
+  await jobPage.goto("https://www.example-jobs.ro/scan-ad");
+  await jobPage.waitForTimeout(2500);
+  await clickToolbar();
+  await expect(app.locator("#pending-job")).toContainText("Job ad found on this page", { timeout: 30_000 });
+  expect(mock.of("transcribe")).toHaveLength(transcribed + 1);
+});
+
 test("New role keeps the CV; Reset everything clears it and the badge asks for a CV again", async () => {
+  await jobPage.goto(JOB_A);
+  await expect.poll(() => badgeText(), { timeout: 15_000 }).toMatch(/^\d+$/);
   await app.click("#btn-new-role");
   await app.click("#btn-new-role");
   await expect(app.locator("#jd")).toHaveValue("");

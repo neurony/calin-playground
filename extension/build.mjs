@@ -14,7 +14,7 @@ fs.rmSync(dist, { recursive: true, force: true });
 fs.mkdirSync(dist, { recursive: true });
 
 await build({
-  entryPoints: { background: path.join(src, "background.js"), content: path.join(src, "content.js"), app: path.join(src, "app/app.js") },
+  entryPoints: { background: path.join(src, "background.js"), content: path.join(src, "content.js"), app: path.join(src, "app/app.js"), offscreen: path.join(src, "offscreen.js") },
   outdir: dist,
   bundle: true,
   format: "iife",
@@ -29,6 +29,7 @@ const copy = (from, to) => { fs.mkdirSync(path.dirname(path.join(dist, to)), { r
 copy(path.join(src, "manifest.json"), "manifest.json");
 copy(path.join(src, "app/app.html"), "app.html");
 copy(path.join(src, "app/app.css"), "app.css");
+copy(path.join(src, "offscreen.html"), "offscreen.html");
 for (const f of fs.readdirSync(path.join(src, "icons"))) copy(path.join(src, "icons", f), "icons/" + f);
 
 // Libraries, bundled with the extension (Manifest V3 does not allow scripts from a CDN).

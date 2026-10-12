@@ -52,6 +52,7 @@ function promptText(body) {
 
 export function classify(body) {
   const text = promptText(body);
+  if (/haiku/.test(body.model) && text.includes("Decide whether it is the advertisement of one specific job opening")) return "extract";
   if (/haiku/.test(body.model)) return "score";
   if (text.includes("These images are the pages of a document")) return "transcribe";
   if (text.includes("tell the candidate honestly how well")) return "questions";
@@ -71,6 +72,15 @@ function answerFor(kind, body, state) {
       // A different CV gets a different score, so the tests can see a re-score.
       const bonus = text.includes("Kubernetes (CKA") ? 5 : 0;
       return { score: hit[1] + bonus, verdict: hit[2] };
+    }
+    case "extract": {
+      const page = text.split(/<page [^>]*>\n/)[1]?.split("\n</page>")[0] || "";
+      if (/NOT-A-/.test(page)) return { isJobAd: false, title: "", company: "", location: "", description: "" };
+      const title = (page.match(/Job title: (.+)/) || [])[1] || page.split("\n")[0];
+      const company = (page.match(/Company: (.+)/) || [])[1] || "";
+      const a = page.indexOf("AD-START"), b = page.indexOf("AD-END");
+      const description = a >= 0 && b > a ? page.slice(a + 8, b).trim() : page.trim();
+      return { isJobAd: true, title: title.trim(), company: company.trim(), location: "", description };
     }
     case "transcribe":
       return "Ion Scanat\nion@example.com\n\nEXPERIENCE\nPlatform Engineer – Example Cloud (2019 – present)\n- Ran Kubernetes clusters in production\n- Wrote Terraform modules";

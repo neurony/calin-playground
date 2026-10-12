@@ -177,9 +177,10 @@
     </div>
 
     <div class="panel step">
-      <div class="step-head"><h2>LinkedIn</h2></div>
-      <label class="row" for="auto-score"><input type="checkbox" id="auto-score"> Auto-score LinkedIn jobs</label>
-      <p class="muted small">When this is on and you open a job ad on linkedin.com, the toolbar icon shows how well your CV fits it (green 75 and above, blue 45-74, orange below 45). "CV?" means CV Tailor has no CV of yours yet; "KEY" means the API key is missing. Each ad is scored once; it is scored again only if your CV changes.</p>
+      <div class="step-head"><h2>Job ads</h2></div>
+      <label class="row" for="auto-score"><input type="checkbox" id="auto-score"> Auto-score job ads</label>
+      <p class="muted small">When this is on and you open a job ad (on LinkedIn or any other site, in a Google Doc or a PDF), the toolbar icon shows how well your CV fits it (green 75 and above, blue 45-74, orange below 45). "CV?" means CV Tailor has no CV of yours yet; "KEY" means the API key is missing. Each ad is scored once; it is scored again only if your CV changes.</p>
+      <p class="muted small">On any page, clicking the toolbar icon reads the page and offers to use the job ad on it as the job description.</p>
       <p class="status small" id="auto-status"></p>
     </div>
 
@@ -187,12 +188,13 @@
       <div class="step-head"><h2>What is sent, and where</h2></div>
       <p class="small">Data leaves your browser only to <b>api.anthropic.com</b> (Anthropic's API), with your key, and only in these cases:</p>
       <ul class="small">
-        <li><b>Auto-score</b> (only while it is on, only on linkedin.com job ads, once per ad): the job ad's title, company and description, and your CV text (uploaded file and pasted text). Model: Claude Haiku 5.5. Nothing is sent for other LinkedIn pages, for other sites, or when you have no CV or no key.</li>
+        <li><b>Auto-score</b> (only while it is on, and only when you have a CV and a key): every page is first checked inside your browser. Only a page that looks like a job ad there (job ad words, or a job ad in the standard format sites publish for search engines) is sent: its address, title and text (up to 60,000 characters), so that Claude can tell whether it really is one job ad and pick the ad out of it. Then, once per ad, the ad and your CV text (uploaded file and pasted text) are sent for the score. On linkedin.com the ad is read directly, so only the ad and your CV are sent. Model: Claude Haiku 5.5.</li>
+        <li><b>Clicking the toolbar icon</b> on a page that is not a known job ad: the page's address, title and text (or the text of the PDF, DOCX or Google Doc it shows) are sent, so that Claude can find the ad in it. Model: Claude Haiku 5.5. A scanned PDF is read as images by Claude Opus 5.5.</li>
         <li><b>Continue: check fit and questions</b>: the job description, your CV, your extra information and your earlier answers. Model: Claude Opus 5.5.</li>
         <li><b>Write my tailored CV / Regenerate</b>, the <b>completeness check</b> that runs right after, <b>Put them back</b> and <b>Rewrite</b>: the job description, your CV, extra information, your answers and the tailored CV. Model: Claude Opus 5.5.</li>
         <li><b>Scanned PDFs</b> (no text layer): images of up to 8 pages, to be transcribed. Model: Claude Opus 5.5.</li>
       </ul>
-      <p class="small">Your key, CV, answers and saved CVs are stored only in this browser profile (extension storage). CV Tailor has no server and sends nothing anywhere else. LinkedIn pages are read in your browser; reading them sends nothing by itself.</p>
+      <p class="small">Your key, CV, answers and saved CVs are stored only in this browser profile (extension storage). CV Tailor has no server and sends nothing anywhere else. Pages and files are read in your browser; reading them sends nothing by itself.</p>
     </div>
   </section>
 </div>

@@ -141,3 +141,49 @@ export async function quickScore({ apiKey, jd, cv }) {
     throw toClaudeError(e);
   }
 }
+
+// ---------- Finding the job ad in the text of any page or document (Haiku) ----------
+const EXTRACT_RULES = `You get the text of a web page or document. Decide whether it is the advertisement of one specific job opening, and if it is, extract the ad.
+- "isJobAd" is true only for the ad of one specific position. It is false for lists or search results with several jobs, company or careers pages without one specific ad, articles, CVs, profiles and anything else.
+- "description": the full text of the ad exactly as written (about the role, responsibilities, requirements, benefits, about the company, how to apply), with its headings and bullet points. Leave out menus, navigation, cookie notices, footers, other job listings and anything else that is not part of the ad. Do not summarise, translate, correct or reword anything.
+- "title", "company" and "location" as the ad gives them; an empty string when the ad does not say.
+- When "isJobAd" is false, all the other fields are empty strings.`;
+
+const EXTRACT_SCHEMA = {
+  type: "object",
+  properties: {
+    isJobAd: { type: "boolean" },
+    title: { type: "string" },
+    company: { type: "string" },
+    location: { type: "string" },
+    description: { type: "string" },
+  },
+  required: ["isJobAd", "title", "company", "location", "description"],
+  additionalProperties: false,
+};
+
+export const MAX_PAGE_TEXT = 60000;
+
+export function buildExtractPrompt({ url, title, text }) {
+  return [EXTRACT_RULES, "", `<page url="${String(url || "").replace(/"/g, "")}" title="${String(title || "").replace(/"/g, "")}">`,
+    String(text || "").slice(0, MAX_PAGE_TEXT), "</page>"].join("\n");
+}
+
+export async function extractJobAd({ apiKey, url, title, text }) {
+  if (!apiKey) throw new ClaudeError("no_key", ERROR_TEXT.no_key);
+  try {
+    const message = await makeClient(apiKey).messages.create({
+      model: MODELS.score,
+      max_tokens: 16000,
+      output_config: { effort: "low", format: { type: "json_schema", schema: EXTRACT_SCHEMA } },
+      messages: [{ role: "user", content: buildExtractPrompt({ url, title, text }) }],
+    });
+    checkStop(message);
+    const raw = parseJsonText(textOf(message));
+    const str = (v) => (typeof v === "string" ? v.trim() : "");
+    const description = str(raw.description);
+    return { isJobAd: raw.isJobAd === true && description.length >= 100, title: str(raw.title), company: str(raw.company), location: str(raw.location), text: description };
+  } catch (e) {
+    throw toClaudeError(e);
+  }
+}

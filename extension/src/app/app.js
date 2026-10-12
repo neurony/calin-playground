@@ -1,7 +1,7 @@
 // CV Tailor app, running as an extension page. Port of artifact/cv-tailor.template.html:
 // window.claude.use("sample") -> Anthropic API with the user's key, use("downloads") -> a normal
 // download, localStorage -> chrome.storage.local (shared with the service worker).
-import { callMain, callMainJson, testKey, toClaudeError, ERROR_TEXT } from "../shared/claude.js";
+import { callMain, callMainJson, testKey, extractJobAd, toClaudeError, ERROR_TEXT } from "../shared/claude.js";
 import {
   STORE_KEY, SETTINGS_KEY, JOBS_KEY, OPEN_KEY, DEFAULT_SETTINGS,
   getSettings, getJobs, cvMaterial, sha256, composeJd, VERDICT_TEXT as QUICK_VERDICT_TEXT,
@@ -69,7 +69,7 @@ I wrote the internal documentation for the refund API.`,
     history: [],             // [{id, role, company, createdAt, updatedAt, result}]
     template: "classic",
     showSources: false,
-    linkedin: null,          // {jobId, url, title, company, jdText}: the LinkedIn ad the job description came from
+    linkedin: null,          // {jobId, url, title, company, jdText}: the ad (LinkedIn or any other page) the job description came from
   });
   let state = freshState();
 
@@ -1458,10 +1458,19 @@ If the material already covers every requirement well, return an empty "question
   });
   $("auto-score").addEventListener("change", async (e) => {
     await saveSettings({ autoScore: e.target.checked });
-    setStatus("auto-status", e.target.checked ? "Auto-score is on." : "Auto-score is off. Nothing is sent when you open LinkedIn jobs.");
+    setStatus("auto-status", e.target.checked ? "Auto-score is on." : "Auto-score is off. Nothing is sent when you open job ads.");
   });
 
-  // ---------- The LinkedIn job this role came from ----------
+  // ---------- The job ad (LinkedIn or any other page) this role came from ----------
+  function sourceName(url) {
+    try {
+      const host = new URL(url).hostname;
+      if (/(^|\.)linkedin\.com$/.test(host)) return "LinkedIn";
+      if (host === "docs.google.com") return "Google Docs";
+      if (host === "drive.google.com") return "Google Drive";
+      return host.replace(/^www\./, "");
+    } catch { return "the web"; }
+  }
   let jobsCache = {};
   async function currentCvHash() {
     const text = cvMaterial(state);
@@ -1477,8 +1486,8 @@ If the material already covers every requirement well, return an empty "question
     panel.hidden = false;
     fill(panel,
       h("div", { class: "row spread" },
-        h("p", { class: "small" }, h("span", { class: "badge", style: "color:var(--ink)" }, "LinkedIn"),
-          "The job description below comes from ", h("b", {}, [li.title, li.company].filter(Boolean).join(" · ") || "a LinkedIn job ad"), ". Check it and fix anything that looks off."),
+        h("p", { class: "small" }, h("span", { class: "badge", style: "color:var(--ink)" }, sourceName(li.url)),
+          "The job description below comes from ", h("b", {}, [li.title, li.company].filter(Boolean).join(" · ") || "a job ad"), ". Check it and fix anything that looks off."),
         li.url ? h("a", { class: "small", href: li.url, target: "_blank", rel: "noopener" }, "Open the ad") : null),
       s ? h("div", { class: "quick-fit" },
         h("span", { class: "pill", style: `color:${scoreColor(s.score)}` }, `Fit ${s.score}/100`),
@@ -1502,28 +1511,77 @@ If the material already covers every requirement well, return an empty "question
     state.jd = composeJd(job);
     state.linkedin = { jobId: job.jobId, url: job.url, title: job.title, company: job.company, jdText: state.jd };
     $("pending-job").hidden = true;
+    const from = sourceName(job.url);
     afterClear(wasExample
-      ? "The job ad from LinkedIn is in step 1. Now add your CV in step 2."
-      : "The job ad from LinkedIn is in step 1. Your CV, extra information and earlier answers are kept.");
+      ? `The job ad from ${from} is in step 1. Now add your CV in step 2.`
+      : `The job ad from ${from} is in step 1. Your CV, extra information and earlier answers are kept.`);
   }
   async function handleOpenRequest(req) {
     if (!req) return;
     await chrome.storage.local.remove(OPEN_KEY);
-    if (!req.jobId || Date.now() - (req.at || 0) > 120000) return; // a request nobody picked up in time is stale
+    if (Date.now() - (req.at || 0) > 120000) return; // a request nobody picked up in time is stale
     jobsCache = await getJobs();
-    const job = jobsCache[req.jobId];
-    if (!job) return;
+    const job = req.jobId ? jobsCache[req.jobId] : null;
+    if (!job) { if (req.tabId != null) offerFromTab(req.tabId); return; }
     if (state.linkedin?.jobId === job.jobId) { renderLinkedin(); return; } // the same ad: keep the work in progress
     if (!hasUnsavedWork()) { loadJob(job); return; }
     const panel = $("pending-job");
     panel.hidden = false;
     fill(panel,
-      h("p", {}, "Load the job ad from LinkedIn: ", h("b", {}, [job.title, job.company].filter(Boolean).join(" · ") || "job " + job.jobId), "?"),
+      h("p", {}, `Load the job ad from ${sourceName(job.url)}: `, h("b", {}, [job.title, job.company].filter(Boolean).join(" · ") || "job " + job.jobId), "?"),
       h("p", { class: "muted small" }, "This replaces the job description and clears the unsaved answers of the current role. Your CV, extra information, saved answers and saved CVs are kept."),
       h("div", { class: "row" },
-        h("button", { class: "btn primary small", onclick: () => loadJob(job) }, "Load the LinkedIn job"),
+        h("button", { class: "btn primary small", onclick: () => loadJob(job) }, "Load this job"),
         h("button", { class: "btn small", onclick: () => { panel.hidden = true; } }, "Keep the current role")));
     showView("input");
+  }
+
+  // The toolbar button on a page that is not a known job ad: read the page, let Claude find the ad in
+  // it, and load it only when the candidate confirms.
+  let offerRun = 0;
+  async function offerFromTab(tabId) {
+    const run = ++offerRun;
+    const panel = $("pending-job");
+    const show = (...children) => { if (run !== offerRun) return; panel.hidden = false; fill(panel, ...children); };
+    const close = h("button", { class: "btn small", onclick: () => { panel.hidden = true; } }, "Close");
+    showView("input");
+    show(h("p", { class: "small" }, h("span", { class: "spinner" }), " Reading the open tab…"));
+    let res;
+    try { res = await chrome.runtime.sendMessage({ type: "read-tab", tabId }); } catch (e) { res = { error: errorText(e) }; }
+    if (run !== offerRun) return;
+    if (!res || res.error) { show(h("p", { class: "small" }, res?.error || "The page could not be read."), h("div", { class: "row" }, close)); return; }
+    let job = null;
+    try {
+      if (res.structured) {
+        job = { jobId: res.jobId, url: res.url, ...res.structured };
+      } else {
+        let text = res.text || "";
+        if (res.scannedPdfUrl) {
+          show(h("p", { class: "small" }, h("span", { class: "spinner" }), " This is a scanned PDF. Claude is reading it…"));
+          const blob = await (await fetch(res.scannedPdfUrl, { credentials: "include" })).blob();
+          text = await extractText(new File([blob], "job-ad.pdf", { type: "application/pdf" }), () => {});
+        }
+        if (!settings.apiKey) { show(h("p", { class: "small" }, ERRORS.no_key), h("div", { class: "row" }, h("button", { class: "btn small primary", "data-go-settings": "1" }, "Open Settings"), close)); return; }
+        show(h("p", { class: "small" }, h("span", { class: "spinner" }), " Claude is looking for the job ad on this page…"));
+        const found = await extractJobAd({ apiKey: settings.apiKey, url: res.url, title: res.title, text });
+        if (found.isJobAd) job = { jobId: res.jobId, url: res.url, title: found.title, company: found.company, location: found.location, text: found.text };
+      }
+    } catch (e) {
+      show(h("p", { class: "small" }, errorText(toClaudeError(e))), h("div", { class: "row" }, close));
+      return;
+    }
+    if (run !== offerRun) return;
+    if (!job) { show(h("p", { class: "small" }, "This page does not look like a job ad."), h("div", { class: "row" }, close)); return; }
+    show(
+      h("p", {}, "Job ad found on this page: ", h("b", {}, [job.title, job.company].filter(Boolean).join(" · ") || sourceName(job.url))),
+      hasUnsavedWork() ? h("p", { class: "muted small" }, "Using it replaces the job description and clears the unsaved answers of the current role. Your CV, extra information, saved answers and saved CVs are kept.") : null,
+      h("div", { class: "row" },
+        h("button", { class: "btn primary small", onclick: async () => {
+          await chrome.runtime.sendMessage({ type: "store-job", job, tabId }).catch(() => {});
+          jobsCache = await getJobs();
+          loadJob(job);
+        } }, "Use this page as the job description"),
+        h("button", { class: "btn small", onclick: () => { panel.hidden = true; } }, "Cancel")));
   }
 
   // The full analysis replaces the toolbar's quick score for this ad, so both show the same number.
